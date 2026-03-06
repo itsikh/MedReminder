@@ -1,1 +1,0 @@
--keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.settings.SettingsViewModel
