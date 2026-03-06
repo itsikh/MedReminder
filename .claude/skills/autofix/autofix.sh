@@ -225,9 +225,12 @@ with open(sys.argv[1]) as f:
 parts = []
 for issue in issues:
     labels = ", ".join(l["name"] for l in issue.get("labels", []))
-    part = f"### Issue #{issue[\"number\"]}: {issue[\"title\"]}\n"
+    num = issue["number"]
+    title = issue["title"]
+    body = issue.get("body", "") or ""
+    part = f"### Issue #{num}: {title}\n"
     if labels: part += f"Labels: {labels}\n"
-    part += f"\n{issue.get(\"body\", \"\") or \"\"}\n"
+    part += f"\n{body}\n"
     parts.append(part)
 print("\n---\n".join(parts))
 '
