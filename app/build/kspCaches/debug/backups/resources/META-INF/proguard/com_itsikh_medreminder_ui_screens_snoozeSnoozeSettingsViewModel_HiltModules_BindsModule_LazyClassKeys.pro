@@ -1,0 +1,7 @@
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.settings.SettingsViewModel
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.settings.SettingsViewModel
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.home.HomeViewModel
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.home.HomeViewModel
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.bugreport.BugReportViewModel
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.bugreport.BugReportViewModel
+-keep,allowobfuscation,allowshrinking class com.itsikh.medreminder.ui.screens.snooze.SnoozeSettingsViewModel

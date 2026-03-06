@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pill / capsule icon rotated 45°.
+  Left half is solid white; right half is slightly translucent; a line divides them.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <group
+        android:rotation="45"
+        android:pivotX="12"
+        android:pivotY="12">
+
+        <!-- Full pill outline (capsule) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M6,7 L18,7 A5,5 0 0 1 18,17 L6,17 A5,5 0 0 1 6,7 Z" />
+
+        <!-- Left half tint (semi-transparent overlay to give two-tone look) -->
+        <path
+            android:fillColor="#33000000"
+            android:pathData="M6,7 L12,7 L12,17 L6,17 A5,5 0 0 1 6,7 Z" />
+
+        <!-- Divider line -->
+        <path
+            android:strokeColor="#BBBBBB"
+            android:strokeWidth="1.2"
+            android:fillColor="@android:color/transparent"
+            android:pathData="M12,7 L12,17" />
+    </group>
+
+</vector>
