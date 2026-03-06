@@ -15,4 +15,6 @@
 .cxx
 local.properties
 *.keystore
+*.jks
+keystore.properties
 .autofix-logs/
