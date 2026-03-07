@@ -90,6 +90,13 @@ class SnoozePrefs @Inject constructor(@ApplicationContext context: Context) {
             .apply()
     }
 
+    // ── Nag interval ──────────────────────────────────────────────────────────────
+    // How many minutes between re-notifications when a reminder is not acknowledged.
+
+    var nagIntervalMinutes: Int
+        get() = prefs.getInt("nag_interval_min", 10)
+        set(v) { prefs.edit().putInt("nag_interval_min", v).apply() }
+
     // ── Notification sound ────────────────────────────────────────────────────────
     // Empty string means "system default". Non-empty is a URI string for the chosen ringtone.
     // null-URI (silent) is stored as the literal string "silent".

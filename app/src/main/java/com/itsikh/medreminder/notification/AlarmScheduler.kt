@@ -48,10 +48,32 @@ class AlarmScheduler @Inject constructor(
         setExact(pi, triggerAt)
     }
 
+    fun scheduleNagAlarm(
+        schedule: MedicationSchedule,
+        medication: Medication,
+        logId: Int,
+        nagDelayMs: Long
+    ) {
+        val triggerAt = System.currentTimeMillis() + nagDelayMs
+        val pi = buildAlarmPendingIntent(
+            schedule, medication, logId, triggerAt,
+            requestCode = schedule.id + 20_000
+        )
+        setExact(pi, triggerAt)
+    }
+
     fun cancelAlarm(scheduleId: Int) {
         val intent = Intent(context, AlarmReceiver::class.java)
         PendingIntent.getBroadcast(
             context, scheduleId, intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )?.let { alarmManager.cancel(it) }
+    }
+
+    fun cancelNagAlarm(scheduleId: Int) {
+        val intent = Intent(context, AlarmReceiver::class.java)
+        PendingIntent.getBroadcast(
+            context, scheduleId + 20_000, intent,
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         )?.let { alarmManager.cancel(it) }
     }

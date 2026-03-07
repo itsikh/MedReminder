@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.itsikh.medreminder.data.model.LogStatus
 import com.itsikh.medreminder.data.model.MedicationLog
+import com.itsikh.medreminder.data.preferences.SnoozePrefs
 import com.itsikh.medreminder.data.repository.MedicationRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,7 @@ class AlarmReceiver : BroadcastReceiver() {
     @Inject lateinit var repository: MedicationRepository
     @Inject lateinit var notificationHelper: NotificationHelper
     @Inject lateinit var alarmScheduler: AlarmScheduler
+    @Inject lateinit var snoozePrefs: SnoozePrefs
 
     override fun onReceive(context: Context, intent: Intent) {
         val result = goAsync()
@@ -33,7 +35,17 @@ class AlarmReceiver : BroadcastReceiver() {
 
                 if (scheduleId == -1 || medicationId == -1) return@launch
 
+                val schedule = repository.getScheduleById(scheduleId)
+                val medication = repository.getMedicationById(medicationId)
+
                 val logId: Int = if (existingLogId > 0) {
+                    // Snooze or nag alarm — only proceed if the log still needs attention
+                    val log = repository.getLogById(existingLogId)
+                    if (log == null || (log.status != LogStatus.PENDING && log.status != LogStatus.SNOOZED)) {
+                        return@launch
+                    }
+                    // Cancel existing notification before re-posting so sound/vibration re-triggers
+                    notificationHelper.cancelNotification(scheduleId)
                     existingLogId
                 } else {
                     // New alarm — create a PENDING log entry and schedule next occurrence
@@ -47,9 +59,6 @@ class AlarmReceiver : BroadcastReceiver() {
                             status = LogStatus.PENDING
                         )
                     ).toInt()
-                    // Schedule the next regular occurrence
-                    val schedule = repository.getScheduleById(scheduleId)
-                    val medication = repository.getMedicationById(medicationId)
                     if (schedule != null && medication != null) {
                         alarmScheduler.scheduleNextAlarm(schedule, medication)
                     }
@@ -64,6 +73,12 @@ class AlarmReceiver : BroadcastReceiver() {
                     logId = logId,
                     scheduledTime = scheduledTime
                 )
+
+                // Schedule a nag alarm to re-notify if the user does not acknowledge
+                val nagIntervalMs = snoozePrefs.nagIntervalMinutes * 60_000L
+                if (schedule != null && medication != null && nagIntervalMs > 0) {
+                    alarmScheduler.scheduleNagAlarm(schedule, medication, logId, nagIntervalMs)
+                }
             } finally {
                 result.finish()
             }

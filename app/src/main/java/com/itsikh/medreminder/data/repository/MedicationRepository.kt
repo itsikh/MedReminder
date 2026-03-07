@@ -30,6 +30,7 @@ class MedicationRepository @Inject constructor(
     fun getLogsForDay(startMs: Long, endMs: Long): Flow<List<MedicationLog>> =
         dao.getLogsForDay(startMs, endMs)
     suspend fun insertLog(log: MedicationLog): Long = dao.insertLog(log)
+    suspend fun getLogById(id: Int): MedicationLog? = dao.getLogById(id)
     suspend fun updateLogStatus(id: Int, status: LogStatus, takenMs: Long?) =
         dao.updateLogStatus(id, status, takenMs)
 

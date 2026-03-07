@@ -26,6 +26,7 @@ class SnoozeSettingsViewModel @Inject constructor(
     var slot1 by mutableIntStateOf(snoozePrefs.slot1)
     var slot2 by mutableIntStateOf(snoozePrefs.slot2)
     var slot3 by mutableIntStateOf(snoozePrefs.slot3)
+    var nagInterval by mutableIntStateOf(snoozePrefs.nagIntervalMinutes)
 
     var homeLat by mutableDoubleStateOf(snoozePrefs.homeLat)
     var homeLng by mutableDoubleStateOf(snoozePrefs.homeLng)
@@ -38,6 +39,7 @@ class SnoozeSettingsViewModel @Inject constructor(
         snoozePrefs.slot1 = slot1.coerceIn(1, 1440)
         snoozePrefs.slot2 = slot2.coerceIn(1, 1440)
         snoozePrefs.slot3 = slot3.coerceIn(1, 1440)
+        snoozePrefs.nagIntervalMinutes = nagInterval.coerceIn(1, 1440)
     }
 
     fun hasLocationPermission(): Boolean =

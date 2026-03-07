@@ -72,6 +72,8 @@ class NotificationHelper @Inject constructor(
         val dosageText = if (dosage.isNotBlank()) " · $dosage" else ""
         val bodyText = "Time to take your $medicationName$dosageText"
 
+        // Android notification shade typically shows only 3 action buttons.
+        // Order: Took it → slot1 → At home (if set, so it's always visible) → slot2 → slot3 → Tonight
         val builder = NotificationCompat.Builder(context, snoozePrefs.currentMedChannelId)
             .setSmallIcon(R.drawable.ic_notification_pill)
             .setContentTitle("💊 $medicationName")
@@ -87,17 +89,19 @@ class NotificationHelper @Inject constructor(
                 actionPi(ACTION_TAKEN, notifId * 10 + 1))
             .addAction(R.drawable.ic_notification_pill, "⏰ ${formatMin(snoozePrefs.slot1)}",
                 actionPi(ACTION_SNOOZE_SLOT_1, notifId * 10 + 2, s1ms))
+
+        if (snoozePrefs.hasHomeLocation) {
+            builder.addAction(R.drawable.ic_notification_pill, "📍 At home",
+                actionPi(ACTION_SNOOZE_LOCATION, notifId * 10 + 6))
+        }
+
+        builder
             .addAction(R.drawable.ic_notification_pill, "⏰ ${formatMin(snoozePrefs.slot2)}",
                 actionPi(ACTION_SNOOZE_SLOT_2, notifId * 10 + 3, s2ms))
             .addAction(R.drawable.ic_notification_pill, "⏰ ${formatMin(snoozePrefs.slot3)}",
                 actionPi(ACTION_SNOOZE_SLOT_3, notifId * 10 + 4, s3ms))
             .addAction(R.drawable.ic_notification_pill, "🌙 Tonight",
                 actionPi(ACTION_SNOOZE_TONIGHT, notifId * 10 + 5))
-
-        if (snoozePrefs.hasHomeLocation) {
-            builder.addAction(R.drawable.ic_notification_pill, "📍 At home",
-                actionPi(ACTION_SNOOZE_LOCATION, notifId * 10 + 6))
-        }
 
         context.getSystemService(NotificationManager::class.java)?.notify(notifId, builder.build())
     }

@@ -81,6 +81,29 @@ fun SnoozeSettingsScreen(
 
             HorizontalDivider()
 
+            // ── Nag interval ──────────────────────────────────────────────────
+            SectionHeader(Icons.Default.Timer, "Re-notify if not acknowledged")
+            Text(
+                "If you don't respond to a reminder, the app will re-alert you at this interval until you take action.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SlotField("Interval", viewModel.nagInterval, Modifier.weight(1f)) { viewModel.nagInterval = it }
+                Text(
+                    "Re-alert every ${formatMin(viewModel.nagInterval)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(2f)
+                )
+            }
+
+            HorizontalDivider()
+
             // ── Home location ─────────────────────────────────────────────────
             SectionHeader(Icons.Default.LocationOn, "Snooze until I'm home")
             Text(
