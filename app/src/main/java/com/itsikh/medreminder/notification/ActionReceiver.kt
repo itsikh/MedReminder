@@ -34,6 +34,13 @@ class ActionReceiver : BroadcastReceiver() {
                 val notifId      = intent.getIntExtra(AlarmScheduler.EXTRA_NOTIF_ID, scheduleId)
                 val scheduledTime = intent.getLongExtra(AlarmScheduler.EXTRA_SCHEDULED_TIME, System.currentTimeMillis())
 
+                // Handle stock dismiss first — doesn't need logId/scheduleId
+                if (action == NotificationHelper.ACTION_DISMISS_STOCK) {
+                    val stockNotifId = intent.getIntExtra(AlarmScheduler.EXTRA_NOTIF_ID, -1)
+                    if (stockNotifId != -1) notificationHelper.cancelNotification(stockNotifId)
+                    return@launch
+                }
+
                 if (logId == -1 || scheduleId == -1) return@launch
 
                 // Cancel any pending nag alarm since the user is responding
@@ -49,8 +56,14 @@ class ActionReceiver : BroadcastReceiver() {
                             val updated = repository.getMedicationById(medicationId)
                             if (updated != null && updated.stockInitial > 0) {
                                 val pct = updated.stockQuantity * 100 / updated.stockInitial
-                                if (pct <= updated.lowStockThresholdPct) {
-                                    notificationHelper.showLowStockNotification(updated)
+                                when {
+                                    pct <= updated.criticalStockThresholdPct -> {
+                                        notificationHelper.cancelNotification(updated.id + NotificationHelper.STOCK_WARN_NOTIF_OFFSET)
+                                        notificationHelper.showLowStockNotification(updated, isCritical = true)
+                                    }
+                                    pct <= updated.lowStockThresholdPct -> {
+                                        notificationHelper.showLowStockNotification(updated, isCritical = false)
+                                    }
                                 }
                             }
                         }

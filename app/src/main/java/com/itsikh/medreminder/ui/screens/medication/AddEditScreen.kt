@@ -188,15 +188,33 @@ fun AddEditScreen(
                 )
                 if (viewModel.stockQuantityText.isNotBlank()) {
                     Text(
-                        "Alert when ${viewModel.lowStockThresholdPct}% or less remaining",
+                        "Warning alert: ${viewModel.lowStockThresholdPct}% or less remaining",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Slider(
                         value = viewModel.lowStockThresholdPct.toFloat(),
-                        onValueChange = { viewModel.lowStockThresholdPct = it.toInt() },
-                        valueRange = 5f..50f,
-                        steps = 8,
+                        onValueChange = {
+                            val v = it.toInt().coerceAtLeast(viewModel.criticalStockThresholdPct + 5)
+                            viewModel.lowStockThresholdPct = v
+                        },
+                        valueRange = 10f..50f,
+                        steps = 7,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Critical alert: ${viewModel.criticalStockThresholdPct}% or less remaining",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Slider(
+                        value = viewModel.criticalStockThresholdPct.toFloat(),
+                        onValueChange = {
+                            val v = it.toInt().coerceAtMost(viewModel.lowStockThresholdPct - 5)
+                            viewModel.criticalStockThresholdPct = v
+                        },
+                        valueRange = 5f..45f,
+                        steps = 7,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
