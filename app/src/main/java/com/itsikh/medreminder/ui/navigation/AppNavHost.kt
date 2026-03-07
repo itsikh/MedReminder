@@ -106,7 +106,8 @@ fun AppNavHost() {
                 composable("medications") {
                     MedicationListScreen(
                         onAddNew = { navController.navigate("add_edit/0") },
-                        onEdit = { id -> navController.navigate("add_edit/$id") }
+                        onEdit = { id -> navController.navigate("add_edit/$id") },
+                        onOpenSettings = { navController.navigate("settings") }
                     )
                 }
                 composable("add_edit/{medId}") { back ->
@@ -117,7 +118,7 @@ fun AppNavHost() {
                     )
                 }
                 composable("log") {
-                    LogScreen()
+                    LogScreen(onOpenSettings = { navController.navigate("settings") })
                 }
                 composable("snooze_settings") {
                     SnoozeSettingsScreen(onBack = { navController.popBackStack() })
