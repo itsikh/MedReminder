@@ -36,6 +36,9 @@ class ActionReceiver : BroadcastReceiver() {
 
                 if (logId == -1 || scheduleId == -1) return@launch
 
+                // Cancel any pending nag alarm since the user is responding
+                alarmScheduler.cancelNagAlarm(scheduleId)
+
                 when (action) {
                     NotificationHelper.ACTION_TAKEN -> {
                         repository.updateLogStatus(logId, LogStatus.TAKEN, System.currentTimeMillis())
