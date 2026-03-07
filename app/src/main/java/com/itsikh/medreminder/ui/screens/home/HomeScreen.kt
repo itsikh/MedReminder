@@ -158,6 +158,16 @@ private fun TodayMedCard(item: TodayMedication, onTaken: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
+                val med = item.medication
+                if (med.stockQuantity >= 0) {
+                    val pct = if (med.stockInitial > 0) med.stockQuantity * 100 / med.stockInitial else 100
+                    val isLow = med.stockInitial > 0 && pct <= med.lowStockThresholdPct
+                    Text(
+                        "📦 ${med.stockQuantity} left${if (med.stockInitial > 0) " ($pct%)" else ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isLow) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (!item.isTaken) {
                 Button(

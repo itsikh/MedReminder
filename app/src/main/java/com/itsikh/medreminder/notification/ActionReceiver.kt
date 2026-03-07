@@ -40,6 +40,17 @@ class ActionReceiver : BroadcastReceiver() {
                     NotificationHelper.ACTION_TAKEN -> {
                         repository.updateLogStatus(logId, LogStatus.TAKEN, System.currentTimeMillis())
                         notificationHelper.cancelNotification(notifId)
+                        val med = repository.getMedicationById(medicationId)
+                        if (med != null && med.stockQuantity >= 0) {
+                            repository.decrementStock(medicationId)
+                            val updated = repository.getMedicationById(medicationId)
+                            if (updated != null && updated.stockInitial > 0) {
+                                val pct = updated.stockQuantity * 100 / updated.stockInitial
+                                if (pct <= updated.lowStockThresholdPct) {
+                                    notificationHelper.showLowStockNotification(updated)
+                                }
+                            }
+                        }
                     }
 
                     NotificationHelper.ACTION_SNOOZE_SLOT_1,

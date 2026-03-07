@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.itsikh.medreminder.data.model.*
 import com.itsikh.medreminder.data.repository.MedicationRepository
 import com.itsikh.medreminder.notification.AlarmScheduler
+import com.itsikh.medreminder.notification.NotificationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -33,7 +34,8 @@ data class TodayMedication(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: MedicationRepository,
-    private val alarmScheduler: AlarmScheduler
+    private val alarmScheduler: AlarmScheduler,
+    private val notificationHelper: NotificationHelper
 ) : ViewModel() {
 
     val todayMedications: StateFlow<List<TodayMedication>> = combine(
@@ -67,6 +69,20 @@ class HomeViewModel @Inject constructor(
                         status = LogStatus.TAKEN
                     )
                 )
+            }
+            deductStockAndNotifyIfLow(item.medication.id)
+        }
+    }
+
+    private suspend fun deductStockAndNotifyIfLow(medicationId: Int) {
+        val before = repository.getMedicationById(medicationId) ?: return
+        if (before.stockQuantity < 0) return  // not tracking stock
+        repository.decrementStock(medicationId)
+        val after = repository.getMedicationById(medicationId) ?: return
+        if (after.stockInitial > 0) {
+            val pct = after.stockQuantity * 100 / after.stockInitial
+            if (pct <= after.lowStockThresholdPct) {
+                notificationHelper.showLowStockNotification(after)
             }
         }
     }

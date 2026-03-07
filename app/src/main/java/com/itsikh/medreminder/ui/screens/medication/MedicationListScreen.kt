@@ -103,6 +103,16 @@ private fun MedListCard(item: MedicationWithSchedules, onEdit: () -> Unit, onDel
                 val daysLabel = daysLabel(item.schedules.firstOrNull()?.daysOfWeek ?: 0x7F)
                 Text(daysLabel, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val med = item.medication
+                if (med.stockQuantity >= 0) {
+                    val pct = if (med.stockInitial > 0) med.stockQuantity * 100 / med.stockInitial else 100
+                    val isLow = med.stockInitial > 0 && pct <= med.lowStockThresholdPct
+                    Text(
+                        "📦 ${med.stockQuantity} left${if (med.stockInitial > 0) " ($pct%)" else ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isLow) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Edit") }
             IconButton(onClick = onDelete) {

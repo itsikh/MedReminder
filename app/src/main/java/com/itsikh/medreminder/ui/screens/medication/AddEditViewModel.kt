@@ -24,6 +24,9 @@ class AddEditViewModel @Inject constructor(
     var daysOfWeek by mutableIntStateOf(0x7F)
     // list of (hour, minute) pairs
     var timeSlots by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
+    // Stock tracking: empty string = not tracking
+    var stockQuantityText by mutableStateOf("")
+    var lowStockThresholdPct by mutableIntStateOf(20)
 
     var isLoading by mutableStateOf(false)
     var isSaved by mutableStateOf(false)
@@ -35,6 +38,8 @@ class AddEditViewModel @Inject constructor(
             name = med.name
             dosage = med.dosage
             color = med.color
+            stockQuantityText = if (med.stockQuantity >= 0) med.stockQuantity.toString() else ""
+            lowStockThresholdPct = med.lowStockThresholdPct
             val schedules = repository.getSchedulesForMedication(medId)
             timeSlots = schedules.map { it.timeHour to it.timeMinute }
             if (schedules.isNotEmpty()) daysOfWeek = schedules.first().daysOfWeek
@@ -58,15 +63,25 @@ class AddEditViewModel @Inject constructor(
     fun save(medId: Int?) {
         if (name.isBlank() || timeSlots.isEmpty()) return
         viewModelScope.launch {
+            val stockQty = stockQuantityText.trim().toIntOrNull() ?: -1
+            val stockInit = if (stockQty >= 0) stockQty else -1
             val finalId: Int = if (medId != null && medId > 0) {
                 val old = repository.getMedicationById(medId) ?: return@launch
-                repository.updateMedication(old.copy(name = name.trim(), dosage = dosage.trim(), color = color))
+                repository.updateMedication(old.copy(
+                    name = name.trim(), dosage = dosage.trim(), color = color,
+                    stockQuantity = stockQty, stockInitial = stockInit,
+                    lowStockThresholdPct = lowStockThresholdPct
+                ))
                 repository.getSchedulesForMedication(medId).forEach { alarmScheduler.cancelAlarm(it.id) }
                 repository.deleteSchedulesForMedication(medId)
                 medId
             } else {
                 repository.insertMedication(
-                    Medication(name = name.trim(), dosage = dosage.trim(), color = color)
+                    Medication(
+                        name = name.trim(), dosage = dosage.trim(), color = color,
+                        stockQuantity = stockQty, stockInitial = stockInit,
+                        lowStockThresholdPct = lowStockThresholdPct
+                    )
                 ).toInt()
             }
 

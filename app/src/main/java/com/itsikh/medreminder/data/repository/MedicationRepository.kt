@@ -18,6 +18,7 @@ class MedicationRepository @Inject constructor(
     suspend fun insertMedication(m: Medication): Long = dao.insertMedication(m)
     suspend fun updateMedication(m: Medication) = dao.updateMedication(m)
     suspend fun deactivateMedication(id: Int) = dao.deactivateMedication(id)
+    suspend fun decrementStock(id: Int) = dao.decrementStock(id)
 
     suspend fun getScheduleById(id: Int): MedicationSchedule? = dao.getScheduleById(id)
     suspend fun getSchedulesForMedication(medId: Int): List<MedicationSchedule> =

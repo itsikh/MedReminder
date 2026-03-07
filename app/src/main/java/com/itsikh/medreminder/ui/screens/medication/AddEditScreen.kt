@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import java.util.Calendar
@@ -169,6 +171,34 @@ fun AddEditScreen(
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Add time")
+                }
+            }
+
+            // ── Stock tracking ───────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Stock (optional)", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(
+                    value = viewModel.stockQuantityText,
+                    onValueChange = { viewModel.stockQuantityText = it.filter { c -> c.isDigit() } },
+                    label = { Text("Current quantity (pills, doses, etc.)") },
+                    placeholder = { Text("Leave empty to skip stock tracking") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                if (viewModel.stockQuantityText.isNotBlank()) {
+                    Text(
+                        "Alert when ${viewModel.lowStockThresholdPct}% or less remaining",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = viewModel.lowStockThresholdPct.toFloat(),
+                        onValueChange = { viewModel.lowStockThresholdPct = it.toInt() },
+                        valueRange = 5f..50f,
+                        steps = 8,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 

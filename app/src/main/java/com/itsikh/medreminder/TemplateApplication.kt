@@ -59,5 +59,15 @@ class TemplateApplication : Application() {
                 setShowBadge(true)
             }
         )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                AppConfig.NOTIFICATION_CHANNEL_STOCK,
+                "Low Stock Alerts",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Alerts when medication stock is running low"
+                setShowBadge(true)
+            }
+        )
     }
 }

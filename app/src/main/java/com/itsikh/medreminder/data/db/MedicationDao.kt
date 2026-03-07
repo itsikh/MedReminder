@@ -25,6 +25,9 @@ interface MedicationDao {
     @Query("UPDATE medications SET isActive = 0 WHERE id = :id")
     suspend fun deactivateMedication(id: Int)
 
+    @Query("UPDATE medications SET stockQuantity = stockQuantity - 1 WHERE id = :id AND stockQuantity > 0")
+    suspend fun decrementStock(id: Int)
+
     // ── Schedules ────────────────────────────────────────────────────────────
 
     @Query("SELECT * FROM medication_schedules WHERE medicationId = :medId")

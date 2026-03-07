@@ -8,6 +8,7 @@ import androidx.core.app.NotificationCompat
 import com.itsikh.medreminder.AppConfig
 import com.itsikh.medreminder.MainActivity
 import com.itsikh.medreminder.R
+import com.itsikh.medreminder.data.model.Medication
 import com.itsikh.medreminder.data.preferences.SnoozePrefs
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -103,6 +104,28 @@ class NotificationHelper @Inject constructor(
 
     fun cancelNotification(notifId: Int) {
         context.getSystemService(NotificationManager::class.java)?.cancel(notifId)
+    }
+
+    fun showLowStockNotification(medication: Medication) {
+        val notifId = medication.id + 50_000
+        val openAppPi = PendingIntent.getActivity(
+            context, notifId,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val qty = medication.stockQuantity
+        val body = "Only $qty ${if (qty == 1) "dose" else "doses"} of ${medication.name} left. Time to reorder!"
+        val builder = NotificationCompat.Builder(context, AppConfig.NOTIFICATION_CHANNEL_STOCK)
+            .setSmallIcon(R.drawable.ic_notification_pill)
+            .setContentTitle("Low stock: ${medication.name}")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(openAppPi)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        context.getSystemService(NotificationManager::class.java)?.notify(notifId, builder.build())
     }
 
     private fun formatMin(minutes: Int): String = when {

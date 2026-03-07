@@ -9,7 +9,7 @@ import com.itsikh.medreminder.data.model.MedicationSchedule
 
 @Database(
     entities = [Medication::class, MedicationSchedule::class, MedicationLog::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -10,5 +10,8 @@ data class Medication(
     val dosage: String = "",
     val color: Int = 0xFF4CAF50.toInt(),
     val isActive: Boolean = true,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val stockQuantity: Int = -1,       // -1 = not tracking; >= 0 = current count
+    val stockInitial: Int = -1,        // -1 = not tracking; >= 0 = count when last restocked
+    val lowStockThresholdPct: Int = 20 // alert when stockQuantity/stockInitial <= this %
 )

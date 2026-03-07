@@ -101,4 +101,11 @@ object AppConfig {
      * Must match the channel created in [TemplateApplication.onCreate].
      */
     const val NOTIFICATION_CHANNEL_MEDICATION = "channel_medication"
+
+    /**
+     * Notification channel ID for low stock alerts.
+     * Used by [notification.NotificationHelper] to post low-stock warnings.
+     * Must match the channel created in [TemplateApplication.onCreate].
+     */
+    const val NOTIFICATION_CHANNEL_STOCK = "channel_stock"
 }
