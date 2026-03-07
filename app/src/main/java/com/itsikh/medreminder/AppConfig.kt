@@ -103,9 +103,17 @@ object AppConfig {
     const val NOTIFICATION_CHANNEL_MEDICATION = "channel_medication"
 
     /**
-     * Notification channel ID for low stock alerts.
+     * Notification channel ID for low stock alerts (warning level).
      * Used by [notification.NotificationHelper] to post low-stock warnings.
      * Must match the channel created in [TemplateApplication.onCreate].
      */
     const val NOTIFICATION_CHANNEL_STOCK = "channel_stock"
+
+    /**
+     * Notification channel ID for critical stock alerts.
+     * Used by [notification.NotificationHelper] to post critical low-stock alerts
+     * that require immediate attention.
+     * Must match the channel created in [TemplateApplication.onCreate].
+     */
+    const val NOTIFICATION_CHANNEL_STOCK_CRITICAL = "channel_stock_critical"
 }

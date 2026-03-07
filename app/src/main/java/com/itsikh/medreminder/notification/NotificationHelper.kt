@@ -26,9 +26,15 @@ class NotificationHelper @Inject constructor(
         const val ACTION_SNOOZE_SLOT_3   = "com.itsikh.medreminder.SNOOZE_3"
         const val ACTION_SNOOZE_TONIGHT  = "com.itsikh.medreminder.SNOOZE_TONIGHT"
         const val ACTION_SNOOZE_LOCATION = "com.itsikh.medreminder.SNOOZE_LOCATION"
+        const val ACTION_DISMISS_STOCK   = "com.itsikh.medreminder.DISMISS_STOCK"
 
         /** Duration in milliseconds, carried in each snooze PendingIntent. */
         const val EXTRA_SNOOZE_MS = "snooze_ms"
+
+        /** Notification ID offset for warning-level stock notifications. */
+        const val STOCK_WARN_NOTIF_OFFSET     = 50_000
+        /** Notification ID offset for critical-level stock notifications. */
+        const val STOCK_CRITICAL_NOTIF_OFFSET = 60_000
     }
 
     fun showMedicationNotification(
@@ -110,8 +116,8 @@ class NotificationHelper @Inject constructor(
         context.getSystemService(NotificationManager::class.java)?.cancel(notifId)
     }
 
-    fun showLowStockNotification(medication: Medication) {
-        val notifId = medication.id + 50_000
+    fun showLowStockNotification(medication: Medication, isCritical: Boolean = false) {
+        val notifId = medication.id + if (isCritical) STOCK_CRITICAL_NOTIF_OFFSET else STOCK_WARN_NOTIF_OFFSET
         val openAppPi = PendingIntent.getActivity(
             context, notifId,
             Intent(context, MainActivity::class.java).apply {
@@ -119,16 +125,31 @@ class NotificationHelper @Inject constructor(
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val dismissPi = PendingIntent.getBroadcast(
+            context, notifId,
+            Intent(ACTION_DISMISS_STOCK, null, context, ActionReceiver::class.java).apply {
+                putExtra(AlarmScheduler.EXTRA_NOTIF_ID, notifId)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val qty = medication.stockQuantity
-        val body = "Only $qty ${if (qty == 1) "dose" else "doses"} of ${medication.name} left. Time to reorder!"
-        val builder = NotificationCompat.Builder(context, AppConfig.NOTIFICATION_CHANNEL_STOCK)
+        val body = if (isCritical)
+            "Critical: only $qty ${if (qty == 1) "dose" else "doses"} of ${medication.name} left! Reorder immediately."
+        else
+            "Only $qty ${if (qty == 1) "dose" else "doses"} of ${medication.name} left. Time to reorder!"
+        val channelId = if (isCritical) AppConfig.NOTIFICATION_CHANNEL_STOCK_CRITICAL else AppConfig.NOTIFICATION_CHANNEL_STOCK
+        val priority = if (isCritical) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT
+        val title = if (isCritical) "Critical stock: ${medication.name}" else "Low stock: ${medication.name}"
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification_pill)
-            .setContentTitle("Low stock: ${medication.name}")
+            .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(openAppPi)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setPriority(priority)
+            .addAction(R.drawable.ic_notification_pill, "Dismiss", dismissPi)
         context.getSystemService(NotificationManager::class.java)?.notify(notifId, builder.build())
     }
 

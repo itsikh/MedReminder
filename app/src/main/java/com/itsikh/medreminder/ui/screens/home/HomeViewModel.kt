@@ -81,8 +81,14 @@ class HomeViewModel @Inject constructor(
         val after = repository.getMedicationById(medicationId) ?: return
         if (after.stockInitial > 0) {
             val pct = after.stockQuantity * 100 / after.stockInitial
-            if (pct <= after.lowStockThresholdPct) {
-                notificationHelper.showLowStockNotification(after)
+            when {
+                pct <= after.criticalStockThresholdPct -> {
+                    notificationHelper.cancelNotification(after.id + NotificationHelper.STOCK_WARN_NOTIF_OFFSET)
+                    notificationHelper.showLowStockNotification(after, isCritical = true)
+                }
+                pct <= after.lowStockThresholdPct -> {
+                    notificationHelper.showLowStockNotification(after, isCritical = false)
+                }
             }
         }
     }

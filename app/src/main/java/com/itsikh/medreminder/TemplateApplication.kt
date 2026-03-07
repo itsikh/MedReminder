@@ -98,5 +98,16 @@ class TemplateApplication : Application() {
                 setShowBadge(true)
             }
         )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                AppConfig.NOTIFICATION_CHANNEL_STOCK_CRITICAL,
+                "Critical Stock Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Urgent alerts when medication stock is critically low"
+                enableVibration(true)
+                setShowBadge(true)
+            }
+        )
     }
 }

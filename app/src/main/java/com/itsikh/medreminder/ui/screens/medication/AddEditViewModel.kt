@@ -27,6 +27,7 @@ class AddEditViewModel @Inject constructor(
     // Stock tracking: empty string = not tracking
     var stockQuantityText by mutableStateOf("")
     var lowStockThresholdPct by mutableIntStateOf(20)
+    var criticalStockThresholdPct by mutableIntStateOf(10)
 
     var isLoading by mutableStateOf(false)
     var isSaved by mutableStateOf(false)
@@ -40,6 +41,7 @@ class AddEditViewModel @Inject constructor(
             color = med.color
             stockQuantityText = if (med.stockQuantity >= 0) med.stockQuantity.toString() else ""
             lowStockThresholdPct = med.lowStockThresholdPct
+            criticalStockThresholdPct = med.criticalStockThresholdPct
             val schedules = repository.getSchedulesForMedication(medId)
             timeSlots = schedules.map { it.timeHour to it.timeMinute }
             if (schedules.isNotEmpty()) daysOfWeek = schedules.first().daysOfWeek
@@ -70,7 +72,8 @@ class AddEditViewModel @Inject constructor(
                 repository.updateMedication(old.copy(
                     name = name.trim(), dosage = dosage.trim(), color = color,
                     stockQuantity = stockQty, stockInitial = stockInit,
-                    lowStockThresholdPct = lowStockThresholdPct
+                    lowStockThresholdPct = lowStockThresholdPct,
+                    criticalStockThresholdPct = criticalStockThresholdPct
                 ))
                 repository.getSchedulesForMedication(medId).forEach { alarmScheduler.cancelAlarm(it.id) }
                 repository.deleteSchedulesForMedication(medId)
@@ -80,7 +83,8 @@ class AddEditViewModel @Inject constructor(
                     Medication(
                         name = name.trim(), dosage = dosage.trim(), color = color,
                         stockQuantity = stockQty, stockInitial = stockInit,
-                        lowStockThresholdPct = lowStockThresholdPct
+                        lowStockThresholdPct = lowStockThresholdPct,
+                        criticalStockThresholdPct = criticalStockThresholdPct
                     )
                 ).toInt()
             }
