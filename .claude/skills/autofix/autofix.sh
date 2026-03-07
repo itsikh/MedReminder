@@ -479,7 +479,10 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
     log "Building release APK..."
     export JAVA_HOME="$JAVA_HOME_PATH"
     export PATH="$JAVA_HOME/bin:$PATH"
-    if ! (cd "$PROJECT_DIR" && ./gradlew assembleRelease 2>&1) >> "$LOG_DIR/release_$(date +%Y%m%d_%H%M%S).log"; then
+    if ! (cd "$PROJECT_DIR" && ./gradlew assembleRelease \
+        --parallel --max-workers=11 --build-cache --configuration-cache \
+        -Dorg.gradle.jvmargs="-Xmx6g -XX:+HeapDumpOnOutOfMemoryError" \
+        -Dkotlin.incremental=true 2>&1) >> "$LOG_DIR/release_$(date +%Y%m%d_%H%M%S).log"; then
         log_error "Release build failed."
         return 1
     fi
