@@ -2,7 +2,8 @@ package com.itsikh.medreminder.ui.components
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -21,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
@@ -79,21 +79,28 @@ fun FloatingBugButton(
                 .shadow(6.dp, CircleShape)
                 .background(MaterialTheme.colorScheme.error, CircleShape)
                 .pointerInput(Unit) {
-                    var dragTotal = Offset.Zero
-                    detectDragGestures(
-                        onDragStart = { dragTotal = Offset.Zero },
-                        onDrag = { change, delta ->
-                            change.consume()
-                            offsetX += delta.x
-                            offsetY += delta.y
-                            dragTotal += Offset(abs(delta.x), abs(delta.y))
-                        },
-                        onDragEnd = {
-                            if (dragTotal.x < 20f && dragTotal.y < 20f) {
-                                capturing = true
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalDx = 0f
+                        var totalDy = 0f
+                        outer@ while (true) {
+                            val event = awaitPointerEvent()
+                            for (change in event.changes) {
+                                if (change.id != down.id) continue
+                                if (!change.pressed) {
+                                    if (totalDx < 20f && totalDy < 20f) capturing = true
+                                    break@outer
+                                }
+                                change.consume()
+                                val dx = change.position.x - change.previousPosition.x
+                                val dy = change.position.y - change.previousPosition.y
+                                offsetX += dx
+                                offsetY += dy
+                                totalDx += abs(dx)
+                                totalDy += abs(dy)
                             }
                         }
-                    )
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
