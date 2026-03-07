@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon foreground: two-tone pill capsule rotated 45°,
+  plus a small alarm-bell indicator above it.
+  Safe zone: 18dp–90dp (content fits within ~34–74 after rotation).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- ── Pill capsule, rotated 45° ──────────────────────────────────── -->
+    <!--
+        Unrotated geometry (centered at 54,54):
+          Left  semicircle center: (38, 54), radius 12  → leftmost  (26, 54)
+          Right semicircle center: (70, 54), radius 12  → rightmost (82, 54)
+          Top/bottom straight edges: y = 42 / 66
+          Divider at x = 54
+        After 45° rotation the tips land at ≈(34,34) and (74,74) — inside safe zone.
+    -->
+    <group
+        android:rotation="45"
+        android:pivotX="54"
+        android:pivotY="54">
+
+        <!-- Left half — solid white -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M38,42 L54,42 L54,66 L38,66 A12,12 0 0 1 38,42 Z" />
+
+        <!-- Right half — light teal (semi-transparent white reveals background) -->
+        <path
+            android:fillColor="#80FFFFFF"
+            android:pathData="M54,42 L70,42 A12,12 0 0 1 70,66 L54,66 Z" />
+
+        <!-- Centre divider -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2"
+            android:fillColor="#00000000"
+            android:pathData="M54,42 L54,66" />
+
+    </group>
+
+    <!-- ── Small alarm bell (upper-right of safe zone, ~72,30) ────────── -->
+    <!--
+        Bell body: arch dome + rectangular body + clapper stem + ball.
+        All elements use solid white to match the pill.
+    -->
+
+    <!-- Left alarm nub -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,22 A4,4 0 1 0 64,22.01 Z" />
+
+    <!-- Right alarm nub -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M76,22 A4,4 0 1 0 76,22.01 Z" />
+
+    <!-- Bell dome + body (single filled path) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M63,26 A7,7 0 0 1 77,26 L79,37 L61,37 Z" />
+
+    <!-- Bell rim bar -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,37 L80,37 L80,40 L60,40 Z" />
+
+    <!-- Clapper stem -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M68,40 L72,40 L72,44 L68,44 Z" />
+
+    <!-- Clapper ball -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70,44 A3,3 0 1 0 70,44.01 Z" />
+
+</vector>
