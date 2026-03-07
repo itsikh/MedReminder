@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.platform.LocalContext
 import com.itsikh.medreminder.bugreport.ScreenshotHolder
 import com.itsikh.medreminder.ui.components.DebugOverlayViewModel
 import com.itsikh.medreminder.ui.components.FloatingBugButton
@@ -25,16 +26,21 @@ import com.itsikh.medreminder.ui.screens.home.HomeScreen
 import com.itsikh.medreminder.ui.screens.log.LogScreen
 import com.itsikh.medreminder.ui.screens.medication.AddEditScreen
 import com.itsikh.medreminder.ui.screens.medication.MedicationListScreen
+import com.itsikh.medreminder.ui.screens.permissions.PermissionScreen
+import com.itsikh.medreminder.ui.screens.permissions.allPermissionsGranted
 import com.itsikh.medreminder.ui.screens.settings.SettingsScreen
 import com.itsikh.medreminder.ui.screens.snooze.SnoozeSettingsScreen
 
 @Composable
 fun AppNavHost() {
+    val context = LocalContext.current
     val navController = rememberNavController()
     val overlayVm: DebugOverlayViewModel = hiltViewModel()
     val showBugButton by overlayVm.showBugButton.collectAsState()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+
+    val startDestination = remember { if (allPermissionsGranted(context)) "home" else "permissions" }
 
     val bottomRoutes = listOf("home", "medications", "log")
 
@@ -82,9 +88,18 @@ fun AppNavHost() {
         ) { innerPadding ->
             NavHost(
                 navController = navController,
-                startDestination = "home",
+                startDestination = startDestination,
                 modifier = Modifier.padding(innerPadding)
             ) {
+                composable("permissions") {
+                    PermissionScreen(
+                        onAllGranted = {
+                            navController.navigate("home") {
+                                popUpTo("permissions") { inclusive = true }
+                            }
+                        }
+                    )
+                }
                 composable("home") {
                     HomeScreen(onOpenSettings = { navController.navigate("settings") })
                 }
