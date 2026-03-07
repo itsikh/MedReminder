@@ -89,4 +89,23 @@ class SnoozePrefs @Inject constructor(@ApplicationContext context: Context) {
             .remove("gf_${logId}_time")
             .apply()
     }
+
+    // ── Notification sound ────────────────────────────────────────────────────────
+    // Empty string means "system default". Non-empty is a URI string for the chosen ringtone.
+    // null-URI (silent) is stored as the literal string "silent".
+
+    var notificationSoundUri: String
+        get() = prefs.getString("notif_sound_uri", "") ?: ""
+        set(v) { prefs.edit().putString("notif_sound_uri", v).apply() }
+
+    var notificationChannelVersion: Int
+        get() = prefs.getInt("notif_channel_ver", 0)
+        set(v) { prefs.edit().putInt("notif_channel_ver", v).apply() }
+
+    /** The active medication notification channel ID — changes when the user picks a new sound. */
+    val currentMedChannelId: String
+        get() {
+            val ver = notificationChannelVersion
+            return if (ver == 0) "channel_medication" else "channel_medication_v$ver"
+        }
 }

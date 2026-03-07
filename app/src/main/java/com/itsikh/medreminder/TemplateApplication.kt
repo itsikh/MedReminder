@@ -3,6 +3,10 @@ package com.itsikh.medreminder
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.media.AudioAttributes
+import android.net.Uri
+import android.provider.Settings
+import com.itsikh.medreminder.data.preferences.SnoozePrefs
 import com.itsikh.medreminder.logging.GlobalExceptionHandler
 import dagger.hilt.android.HiltAndroidApp
 
@@ -48,6 +52,7 @@ class TemplateApplication : Application() {
                 description = "Notifications for completed backups that are ready to save"
             }
         )
+        // Base medication channel (version 0 — system default sound, user-configurable via OS)
         manager.createNotificationChannel(
             NotificationChannel(
                 AppConfig.NOTIFICATION_CHANNEL_MEDICATION,
@@ -59,6 +64,30 @@ class TemplateApplication : Application() {
                 setShowBadge(true)
             }
         )
+        // Ensure the currently-selected versioned channel exists (e.g. after user deleted it in OS settings)
+        val snoozePrefs = SnoozePrefs(this)
+        val channelId = snoozePrefs.currentMedChannelId
+        if (channelId != AppConfig.NOTIFICATION_CHANNEL_MEDICATION &&
+            manager.getNotificationChannel(channelId) == null) {
+            val uriStr = snoozePrefs.notificationSoundUri
+            val soundUri: Uri? = when {
+                uriStr == "silent" -> null
+                uriStr.isNotEmpty() -> Uri.parse(uriStr)
+                else -> Settings.System.DEFAULT_NOTIFICATION_URI
+            }
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            manager.createNotificationChannel(
+                NotificationChannel(channelId, "Medication Reminders", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Reminders to take your medications"
+                    enableVibration(true)
+                    setShowBadge(true)
+                    setSound(soundUri, audioAttrs)
+                }
+            )
+        }
         manager.createNotificationChannel(
             NotificationChannel(
                 AppConfig.NOTIFICATION_CHANNEL_STOCK,

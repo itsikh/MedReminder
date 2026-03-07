@@ -72,7 +72,7 @@ class NotificationHelper @Inject constructor(
         val dosageText = if (dosage.isNotBlank()) " · $dosage" else ""
         val bodyText = "Time to take your $medicationName$dosageText"
 
-        val builder = NotificationCompat.Builder(context, AppConfig.NOTIFICATION_CHANNEL_MEDICATION)
+        val builder = NotificationCompat.Builder(context, snoozePrefs.currentMedChannelId)
             .setSmallIcon(R.drawable.ic_notification_pill)
             .setContentTitle("💊 $medicationName")
             .setContentText(bodyText)

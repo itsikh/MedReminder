@@ -1,6 +1,10 @@
 package com.itsikh.medreminder.ui.screens.settings
 
+import android.app.Activity
+import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +34,7 @@ import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,6 +60,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -105,14 +111,46 @@ fun SettingsScreen(
     onOpenSnoozeSettings: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val adminMode       by viewModel.adminMode.collectAsState()
-    val logLevel        by viewModel.logLevel.collectAsState()
-    val showBugButton   by viewModel.showBugButton.collectAsState()
-    val autoUpdate      by viewModel.autoUpdateEnabled.collectAsState()
-    val autoBackup      by viewModel.autoBackupEnabled.collectAsState()
-    val updateState     by viewModel.updateState.collectAsState()
-    val exportState     by viewModel.exportState.collectAsState()
-    val restoreState    by viewModel.restoreState.collectAsState()
+    val adminMode              by viewModel.adminMode.collectAsState()
+    val logLevel               by viewModel.logLevel.collectAsState()
+    val showBugButton          by viewModel.showBugButton.collectAsState()
+    val autoUpdate             by viewModel.autoUpdateEnabled.collectAsState()
+    val autoBackup             by viewModel.autoBackupEnabled.collectAsState()
+    val updateState            by viewModel.updateState.collectAsState()
+    val exportState            by viewModel.exportState.collectAsState()
+    val restoreState           by viewModel.restoreState.collectAsState()
+    val notificationSoundUri   by viewModel.notificationSoundUri.collectAsState()
+
+    val context = LocalContext.current
+
+    // Derive a human-readable name for the currently selected notification sound
+    val notificationSoundName = remember(notificationSoundUri) {
+        when {
+            notificationSoundUri == "silent" -> "Silent"
+            notificationSoundUri.isEmpty() -> "Default"
+            else -> try {
+                RingtoneManager.getRingtone(context, Uri.parse(notificationSoundUri))
+                    ?.getTitle(context) ?: "Custom"
+            } catch (e: Exception) {
+                "Custom"
+            }
+        }
+    }
+
+    // Ringtone picker launcher
+    val soundPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            }
+            viewModel.updateNotificationSound(uri)
+        }
+    }
 
     // SAF launchers — CreateDocument shows all providers including Google Drive
     val exportLauncher = rememberLauncherForActivityResult(
@@ -162,7 +200,7 @@ fun SettingsScreen(
                 onShowBugButtonToggle = { viewModel.setShowBugButton(it) }
             ) {
 
-                // ── Snooze & Location ─────────────────────────────────────────
+                // ── Reminders ─────────────────────────────────────────────────
                 SectionHeader("Reminders")
                 Spacer(Modifier.height(8.dp))
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -181,6 +219,45 @@ fun SettingsScreen(
                             )
                         }
                         OutlinedButton(onClick = onOpenSnoozeSettings) { Text("Configure") }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.primary)
+                        Column(Modifier.weight(1f)) {
+                            Text("Notification Sound", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                notificationSoundName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val currentUri = notificationSoundUri.let {
+                                    when {
+                                        it == "silent" -> null
+                                        it.isNotEmpty() -> Uri.parse(it)
+                                        else -> Settings.System.DEFAULT_NOTIFICATION_URI
+                                    }
+                                }
+                                val intent = android.content.Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Medication Reminder Sound")
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, Settings.System.DEFAULT_NOTIFICATION_URI)
+                                    currentUri?.let { putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, it) }
+                                }
+                                soundPickerLauncher.launch(intent)
+                            }
+                        ) { Text("Change") }
                     }
                 }
 

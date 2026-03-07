@@ -1,12 +1,17 @@
 package com.itsikh.medreminder.ui.screens.settings
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.net.Uri
 import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsikh.medreminder.AppConfig
 import com.itsikh.medreminder.bugreport.GitHubIssuesClient
+import com.itsikh.medreminder.data.preferences.SnoozePrefs
 import com.itsikh.medreminder.logging.AppLogger
 import com.itsikh.medreminder.logging.DebugSettings
 import com.itsikh.medreminder.logging.LogLevel
@@ -56,6 +61,7 @@ class SettingsViewModel @Inject constructor(
     private val debugSettings: DebugSettings,
     private val secureKeyManager: SecureKeyManager,
     private val updateManager: AppUpdateManager,
+    private val snoozePrefs: SnoozePrefs,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -278,6 +284,53 @@ class SettingsViewModel @Inject constructor(
 
     fun resetRestoreState() {
         _restoreState.value = RestoreState.Idle
+    }
+
+    // ── Notification sound ────────────────────────────────────────────────────────
+
+    private val _notificationSoundUri = MutableStateFlow(snoozePrefs.notificationSoundUri)
+    val notificationSoundUri: StateFlow<String> = _notificationSoundUri
+
+    /**
+     * Creates a new versioned notification channel with the given [uri] as its sound,
+     * stores the preference, and deletes the previously-used versioned channel.
+     * Passing [uri] == null results in a silent channel.
+     */
+    fun updateNotificationSound(uri: Uri?) {
+        viewModelScope.launch {
+            val uriStr = uri?.toString() ?: "silent"
+            val newVersion = snoozePrefs.notificationChannelVersion + 1
+            val newChannelId = "${AppConfig.NOTIFICATION_CHANNEL_MEDICATION}_v$newVersion"
+
+            val manager = context.getSystemService(NotificationManager::class.java)!!
+            val audioAttrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            val soundUri: Uri? = when {
+                uri == null -> null
+                else -> uri
+            }
+            manager.createNotificationChannel(
+                NotificationChannel(newChannelId, "Medication Reminders", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Reminders to take your medications"
+                    enableVibration(true)
+                    setShowBadge(true)
+                    setSound(soundUri, audioAttrs)
+                }
+            )
+
+            // Delete the old versioned channel (keep the base channel as a fallback)
+            val oldChannelId = snoozePrefs.currentMedChannelId
+            if (oldChannelId != AppConfig.NOTIFICATION_CHANNEL_MEDICATION) {
+                manager.deleteNotificationChannel(oldChannelId)
+            }
+
+            snoozePrefs.notificationSoundUri = uriStr
+            snoozePrefs.notificationChannelVersion = newVersion
+            _notificationSoundUri.value = uriStr
+            AppLogger.i(TAG, "Notification sound updated")
+        }
     }
 
     companion object {
