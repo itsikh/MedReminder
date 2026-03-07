@@ -432,7 +432,84 @@ for i in issues: print(i["number"])' | while IFS= read -r num; do
     done
 
     log "=== Autofix run completed ==="
+
+    if [[ "$any_fixed" == "true" ]]; then
+        log "Issues were fixed — triggering release..."
+        trigger_release || log_error "Release failed, but fixes are committed."
+    fi
+
     if [[ "$any_failed" == "true" ]]; then return 1; fi
+}
+
+# ── Release ───────────────────────────────────────────────────────────────────
+trigger_release() {
+    cd "$PROJECT_DIR"
+    local gradle="$PROJECT_DIR/app/build.gradle.kts"
+
+    # Read current version
+    local old_name old_code
+    old_name=$(python3 -c "import re,sys; m=re.search(r'versionName\s*=\s*\"([^\"]+)\"', open('$gradle').read()); print(m.group(1))")
+    old_code=$(python3 -c "import re,sys; m=re.search(r'versionCode\s*=\s*(\d+)', open('$gradle').read()); print(m.group(1))")
+
+    # Bump patch
+    local major minor patch
+    IFS='.' read -r major minor patch <<< "$old_name"
+    local new_name="$major.$minor.$((patch + 1))"
+    local new_code=$(( old_code + 1 ))
+
+    log "Bumping $old_name (code $old_code) → $new_name (code $new_code)"
+
+    # Update build.gradle.kts
+    python3 -c "
+import re
+content = open('$gradle').read()
+content = re.sub(r'versionCode\s*=\s*\d+', 'versionCode = $new_code', content)
+content = re.sub(r'versionName\s*=\s*\"[^\"]+\"', 'versionName = \"$new_name\"', content)
+open('$gradle', 'w').write(content)
+"
+    git add "$gradle"
+    git commit -m "chore: release v$new_name
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+
+    # Push source
+    push_to_remote origin
+
+    # Build
+    log "Building release APK..."
+    export JAVA_HOME="$JAVA_HOME_PATH"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    if ! (cd "$PROJECT_DIR" && ./gradlew assembleRelease 2>&1) >> "$LOG_DIR/release_$(date +%Y%m%d_%H%M%S).log"; then
+        log_error "Release build failed."
+        return 1
+    fi
+    log "Build succeeded."
+
+    # Tag + push tag
+    local apk_src="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
+    local app_name
+    app_name=$(python3 -c "import re; m=re.search(r'APP_NAME\s*=\s*\"([^\"]+)\"', open('$PROJECT_DIR/app/src/main/java/com/itsikh/medreminder/AppConfig.kt').read()); print(m.group(1).replace(' ','-'))")
+    local apk_dest="$PROJECT_DIR/${app_name}-v${new_name}.apk"
+    cp "$apk_src" "$apk_dest"
+
+    git tag "v$new_name"
+    push_to_remote origin
+    git push origin "v$new_name" || true
+
+    # GitHub release
+    local repo_owner repo_name
+    repo_owner=$(python3 -c "import re; m=re.search(r'GITHUB_RELEASES_REPO_OWNER\s*=\s*\"([^\"]+)\"', open('$PROJECT_DIR/app/src/main/java/com/itsikh/medreminder/AppConfig.kt').read()); print(m.group(1))")
+    repo_name=$(python3 -c "import re; m=re.search(r'GITHUB_RELEASES_REPO_NAME\s*=\s*\"([^\"]+)\"', open('$PROJECT_DIR/app/src/main/java/com/itsikh/medreminder/AppConfig.kt').read()); print(m.group(1))")
+
+    gh release create "v$new_name" \
+        --repo "$repo_owner/$repo_name" \
+        --title "$app_name v$new_name" \
+        --notes "## What's new
+Autofix agent resolved issues: ${all_fixed_issues[*]:-}" \
+        "$apk_dest"
+    rm -f "$apk_dest"
+
+    log "Released $app_name v$new_name → https://github.com/$repo_owner/$repo_name/releases/tag/v$new_name"
 }
 
 set -o pipefail
