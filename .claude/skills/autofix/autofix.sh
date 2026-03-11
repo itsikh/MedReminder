@@ -23,7 +23,7 @@ run_timed() {
     ( sleep "$secs" && kill "$child" 2>/dev/null ) &
     local timer=$!
     wait "$child"; local ret=$?
-    kill "$timer" 2>/dev/null; wait "$timer" 2>/dev/null
+    kill "$timer" 2>/dev/null; wait "$timer" 2>/dev/null || true
     return $ret
 }
 
