@@ -19,6 +19,7 @@ PROJECT_DIR="/Users/itsik-personal/dev/MedReminder"
 AUTOFIX_SCRIPT="$PROJECT_DIR/.claude/skills/autofix/autofix.sh"
 LOG_DIR="$PROJECT_DIR/.autofix-logs"
 MAX_META_RETRIES=2
+MAX_RUN_SECONDS=3600   # 1 hour hard limit per run
 
 timestamp() { date "+%Y-%m-%d %H:%M:%S"; }
 log()       { echo "[$(timestamp)] [wrapper] $*"; }
@@ -31,8 +32,21 @@ while [[ $attempt -le $((MAX_META_RETRIES + 1)) ]]; do
     log "=== Run attempt $attempt / $((MAX_META_RETRIES + 1)) ==="
 
     run_log="$LOG_DIR/wrapper_run_$(date +%Y%m%d_%H%M%S).log"
-    bash "$AUTOFIX_SCRIPT" 2>&1 | tee "$run_log"
-    exit_code=${PIPESTATUS[0]}
+    # Use process substitution so $! is the bash PID, not tee's PID.
+    # This ensures the timeout killer terminates the actual autofix process.
+    bash "$AUTOFIX_SCRIPT" > >(tee "$run_log") 2>&1 &
+    autofix_pid=$!
+    # Kill the entire process group on timeout so claude subprocesses also die.
+    (sleep "$MAX_RUN_SECONDS" && kill -- -"$autofix_pid" 2>/dev/null; kill "$autofix_pid" 2>/dev/null) &
+    killer_pid=$!
+    wait "$autofix_pid"
+    exit_code=$?
+    kill "$killer_pid" 2>/dev/null
+    wait "$killer_pid" 2>/dev/null
+    if [[ $exit_code -eq 143 ]]; then
+        log_err "autofix.sh exceeded ${MAX_RUN_SECONDS}s hard limit — killed by timeout."
+        exit_code=124
+    fi
 
     if [[ $exit_code -eq 0 ]]; then
         log "autofix.sh succeeded on attempt $attempt."
