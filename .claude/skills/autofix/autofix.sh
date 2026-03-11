@@ -13,6 +13,19 @@ set -euo pipefail
 ###############################################################################
 
 export PATH="/opt/homebrew/bin:/Users/itsik-personal/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export GIT_SSH_COMMAND="ssh -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o BatchMode=yes"
+
+# Bash-native timeout (macOS cron has no `timeout` command)
+run_timed() {
+    local secs="$1"; shift
+    "$@" &
+    local child=$!
+    ( sleep "$secs" && kill "$child" 2>/dev/null ) &
+    local timer=$!
+    wait "$child"; local ret=$?
+    kill "$timer" 2>/dev/null; wait "$timer" 2>/dev/null
+    return $ret
+}
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 PROJECT_DIR="/Users/itsik-personal/dev/MedReminder"
@@ -91,11 +104,11 @@ acquire_lock() {
 # ── Git State ─────────────────────────────────────────────────────────────────
 push_to_remote() {
     local remote="$1"
-    if git push "$remote" main 2>/dev/null; then
+    if run_timed 60 git push "$remote" main 2>/dev/null; then
         return 0
     fi
     log "Fast-forward push to $remote rejected — retrying with --force-with-lease..."
-    git push "$remote" main --force-with-lease 2>/dev/null || \
+    run_timed 60 git push "$remote" main --force-with-lease 2>/dev/null || \
         log_error "Could not push to $remote"
 }
 
@@ -112,7 +125,7 @@ verify_git_state() {
         git add -u
         git commit -m "autofix: auto-commit pending changes before run" || true
     fi
-    git fetch origin 2>/dev/null || true
+    run_timed 60 git fetch origin 2>/dev/null || log "git fetch timed out or failed — continuing."
     local origin_ahead
     origin_ahead=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo 0)
     if [[ "$origin_ahead" -gt 0 ]]; then
