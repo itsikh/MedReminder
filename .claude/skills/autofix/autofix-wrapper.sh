@@ -14,6 +14,7 @@ set -uo pipefail
 ###############################################################################
 
 export PATH="/opt/homebrew/bin:/Users/itsik-personal/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+unset CLAUDECODE  # prevent "nested session" error when run from cron
 
 PROJECT_DIR="/Users/itsik-personal/dev/MedReminder"
 AUTOFIX_SCRIPT="$PROJECT_DIR/.claude/skills/autofix/autofix.sh"

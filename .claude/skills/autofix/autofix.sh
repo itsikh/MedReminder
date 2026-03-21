@@ -13,6 +13,7 @@ set -euo pipefail
 ###############################################################################
 
 export PATH="/opt/homebrew/bin:/Users/itsik-personal/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+unset CLAUDECODE  # prevent "nested session" error when run from cron
 export GIT_SSH_COMMAND="ssh -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o BatchMode=yes"
 
 # Bash-native timeout (macOS cron has no `timeout` command)
