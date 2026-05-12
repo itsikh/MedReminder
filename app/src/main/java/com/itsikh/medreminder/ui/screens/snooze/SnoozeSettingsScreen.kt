@@ -1,6 +1,7 @@
 package com.itsikh.medreminder.ui.screens.snooze
 
 import android.Manifest
+import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -10,11 +11,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -100,6 +103,57 @@ fun SnoozeSettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(2f)
                 )
+            }
+
+            HorizontalDivider()
+
+            // ── Quiet hour cutoff ─────────────────────────────────────────────
+            SectionHeader(Icons.Default.NotificationsOff, "Stop reminders after")
+            Text(
+                "After this hour, unacknowledged reminders will be silently marked as missed without notifying you.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Switch(
+                    checked = viewModel.quietHourEnabled,
+                    onCheckedChange = { viewModel.quietHourEnabled = it }
+                )
+                Text(
+                    if (viewModel.quietHourEnabled) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            if (viewModel.quietHourEnabled) {
+                val ctx = LocalContext.current
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "No reminders after:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            TimePickerDialog(
+                                ctx,
+                                { _, h, _ -> viewModel.quietHour = h },
+                                viewModel.quietHour,
+                                0,
+                                true
+                            ).show()
+                        }
+                    ) {
+                        Text("%02d:00".format(viewModel.quietHour))
+                    }
+                }
             }
 
             HorizontalDivider()

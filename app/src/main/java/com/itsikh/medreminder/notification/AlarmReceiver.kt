@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -38,6 +39,9 @@ class AlarmReceiver : BroadcastReceiver() {
                 val schedule = repository.getScheduleById(scheduleId)
                 val medication = repository.getMedicationById(medicationId)
 
+                val isPastCutoff = snoozePrefs.quietHourEnabled &&
+                    Calendar.getInstance().get(Calendar.HOUR_OF_DAY) >= snoozePrefs.quietHour
+
                 val logId: Int = if (existingLogId > 0) {
                     // Snooze or nag alarm — only proceed if the log still needs attention
                     val log = repository.getLogById(existingLogId)
@@ -46,9 +50,14 @@ class AlarmReceiver : BroadcastReceiver() {
                     }
                     // Cancel existing notification before re-posting so sound/vibration re-triggers
                     notificationHelper.cancelNotification(scheduleId)
+                    if (isPastCutoff) {
+                        repository.updateLogStatus(existingLogId, LogStatus.MISSED, null)
+                        if (schedule != null) alarmScheduler.cancelNagAlarm(schedule.id)
+                        return@launch
+                    }
                     existingLogId
                 } else {
-                    // New alarm — create a PENDING log entry and schedule next occurrence
+                    // New alarm — create a log entry and schedule next occurrence
                     val id = repository.insertLog(
                         MedicationLog(
                             medicationId = medicationId,
@@ -56,12 +65,13 @@ class AlarmReceiver : BroadcastReceiver() {
                             medicationName = medName,
                             dosage = dosage,
                             scheduledTimeMillis = scheduledTime,
-                            status = LogStatus.PENDING
+                            status = if (isPastCutoff) LogStatus.MISSED else LogStatus.PENDING
                         )
                     ).toInt()
                     if (schedule != null && medication != null) {
                         alarmScheduler.scheduleNextAlarm(schedule, medication)
                     }
+                    if (isPastCutoff) return@launch
                     id
                 }
 

@@ -28,6 +28,9 @@ class SnoozeSettingsViewModel @Inject constructor(
     var slot3 by mutableIntStateOf(snoozePrefs.slot3)
     var nagInterval by mutableIntStateOf(snoozePrefs.nagIntervalMinutes)
 
+    var quietHourEnabled by mutableStateOf(snoozePrefs.quietHourEnabled)
+    var quietHour by mutableIntStateOf(snoozePrefs.quietHour)
+
     var homeLat by mutableDoubleStateOf(snoozePrefs.homeLat)
     var homeLng by mutableDoubleStateOf(snoozePrefs.homeLng)
     val hasHomeLocation get() = !homeLat.isNaN() && !homeLng.isNaN()
@@ -40,6 +43,8 @@ class SnoozeSettingsViewModel @Inject constructor(
         snoozePrefs.slot2 = slot2.coerceIn(1, 1440)
         snoozePrefs.slot3 = slot3.coerceIn(1, 1440)
         snoozePrefs.nagIntervalMinutes = nagInterval.coerceIn(1, 1440)
+        snoozePrefs.quietHourEnabled = quietHourEnabled
+        snoozePrefs.quietHour = quietHour.coerceIn(0, 23)
     }
 
     fun hasLocationPermission(): Boolean =

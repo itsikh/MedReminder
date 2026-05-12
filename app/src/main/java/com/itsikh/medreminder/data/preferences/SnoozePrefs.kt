@@ -115,4 +115,15 @@ class SnoozePrefs @Inject constructor(@ApplicationContext context: Context) {
             val ver = notificationChannelVersion
             return if (ver == 0) "channel_medication" else "channel_medication_v$ver"
         }
+
+    // ── Quiet hour cutoff ─────────────────────────────────────────────────────────
+    // When enabled, reminders that fire at or after this hour are silently marked MISSED.
+
+    var quietHourEnabled: Boolean
+        get() = prefs.getBoolean("quiet_hour_enabled", false)
+        set(v) { prefs.edit().putBoolean("quiet_hour_enabled", v).apply() }
+
+    var quietHour: Int  // 0-23
+        get() = prefs.getInt("quiet_hour", 22)
+        set(v) { prefs.edit().putInt("quiet_hour", v).apply() }
 }
