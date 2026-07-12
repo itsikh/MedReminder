@@ -81,6 +81,7 @@ private fun LogEntry(log: MedicationLog) {
         LogStatus.MISSED   -> Color(0xFFF44336) to "❌"
         LogStatus.SNOOZED  -> Color(0xFFFF9800) to "⏰"
         LogStatus.PENDING  -> Color(0xFF9E9E9E) to "⏳"
+        LogStatus.SKIPPED  -> Color(0xFF607D8B) to "🚫"
     }
 
     Row(

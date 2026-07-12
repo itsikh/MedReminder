@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.itsikh.medreminder.AppConfig
 import com.itsikh.medreminder.MainActivity
@@ -21,6 +22,7 @@ class NotificationHelper @Inject constructor(
 ) {
     companion object {
         const val ACTION_TAKEN           = "com.itsikh.medreminder.TAKEN"
+        const val ACTION_SKIP_TODAY      = "com.itsikh.medreminder.SKIP_TODAY"
         const val ACTION_SNOOZE_SLOT_1   = "com.itsikh.medreminder.SNOOZE_1"
         const val ACTION_SNOOZE_SLOT_2   = "com.itsikh.medreminder.SNOOZE_2"
         const val ACTION_SNOOZE_SLOT_3   = "com.itsikh.medreminder.SNOOZE_3"
@@ -101,41 +103,45 @@ class NotificationHelper @Inject constructor(
 
         val s1ms = snoozePrefs.slot1 * 60_000L
         val s2ms = snoozePrefs.slot2 * 60_000L
-        val s3ms = snoozePrefs.slot3 * 60_000L
 
         val dosageText = if (dosage.isNotBlank()) " · $dosage" else ""
         val bodyText = "Time to take your $medicationName$dosageText"
 
-        // Android notification shade typically shows only 3 action buttons.
-        // Order: Took it → slot1 → At home (if set, so it's always visible) → slot2 → slot3 → Tonight
+        // The system notification template shows at most 3 action buttons, so the
+        // expanded and heads-up views use a custom layout that fits 4:
+        // Took it → slot1 snooze → At home (or slot2 snooze if no home set) → Skip today.
+        // A fresh RemoteViews instance is required per view — they must not be shared.
+        fun actionViews(): RemoteViews {
+            val rv = RemoteViews(context.packageName, R.layout.notification_medication)
+            rv.setTextViewText(R.id.notif_title, "💊 $medicationName")
+            rv.setTextViewText(R.id.notif_text, bodyText)
+            rv.setOnClickPendingIntent(R.id.btn_taken, actionPi(ACTION_TAKEN, notifId * 10 + 1))
+            rv.setTextViewText(R.id.btn_snooze, "⏰ ${formatMin(snoozePrefs.slot1)}")
+            rv.setOnClickPendingIntent(R.id.btn_snooze, actionPi(ACTION_SNOOZE_SLOT_1, notifId * 10 + 2, s1ms))
+            if (snoozePrefs.hasHomeLocation) {
+                rv.setTextViewText(R.id.btn_third, "📍 Home")
+                rv.setOnClickPendingIntent(R.id.btn_third, actionPi(ACTION_SNOOZE_LOCATION, notifId * 10 + 6))
+            } else {
+                rv.setTextViewText(R.id.btn_third, "⏰ ${formatMin(snoozePrefs.slot2)}")
+                rv.setOnClickPendingIntent(R.id.btn_third, actionPi(ACTION_SNOOZE_SLOT_2, notifId * 10 + 3, s2ms))
+            }
+            rv.setOnClickPendingIntent(R.id.btn_skip, actionPi(ACTION_SKIP_TODAY, notifId * 10 + 7))
+            return rv
+        }
+
         val builder = NotificationCompat.Builder(context, snoozePrefs.currentMedChannelId)
             .setSmallIcon(R.drawable.ic_notification_pill)
             .setContentTitle("💊 $medicationName")
             .setContentText(bodyText)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(bodyText))
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomBigContentView(actionViews())
+            .setCustomHeadsUpContentView(actionViews())
             .setContentIntent(openAppPi)
             .setAutoCancel(false)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(R.drawable.ic_notification_pill, "✅ Took it",
-                actionPi(ACTION_TAKEN, notifId * 10 + 1))
-            .addAction(R.drawable.ic_notification_pill, "⏰ ${formatMin(snoozePrefs.slot1)}",
-                actionPi(ACTION_SNOOZE_SLOT_1, notifId * 10 + 2, s1ms))
-
-        if (snoozePrefs.hasHomeLocation) {
-            builder.addAction(R.drawable.ic_notification_pill, "📍 At home",
-                actionPi(ACTION_SNOOZE_LOCATION, notifId * 10 + 6))
-        }
-
-        builder
-            .addAction(R.drawable.ic_notification_pill, "⏰ ${formatMin(snoozePrefs.slot2)}",
-                actionPi(ACTION_SNOOZE_SLOT_2, notifId * 10 + 3, s2ms))
-            .addAction(R.drawable.ic_notification_pill, "⏰ ${formatMin(snoozePrefs.slot3)}",
-                actionPi(ACTION_SNOOZE_SLOT_3, notifId * 10 + 4, s3ms))
-            .addAction(R.drawable.ic_notification_pill, "🌙 Tonight",
-                actionPi(ACTION_SNOOZE_TONIGHT, notifId * 10 + 5))
 
         context.getSystemService(NotificationManager::class.java)?.notify(notifId, builder.build())
     }

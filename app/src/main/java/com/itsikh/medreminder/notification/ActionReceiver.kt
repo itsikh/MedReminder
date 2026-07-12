@@ -69,6 +69,13 @@ class ActionReceiver : BroadcastReceiver() {
                         }
                     }
 
+                    NotificationHelper.ACTION_SKIP_TODAY -> {
+                        // Intentionally skipped — no re-reminders today. The next daily
+                        // occurrence was already scheduled when the alarm fired.
+                        repository.updateLogStatus(logId, LogStatus.SKIPPED, null)
+                        notificationHelper.cancelNotification(notifId)
+                    }
+
                     NotificationHelper.ACTION_SNOOZE_SLOT_1,
                     NotificationHelper.ACTION_SNOOZE_SLOT_2,
                     NotificationHelper.ACTION_SNOOZE_SLOT_3 -> {

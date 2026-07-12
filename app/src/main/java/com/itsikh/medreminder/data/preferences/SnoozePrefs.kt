@@ -17,15 +17,15 @@ class SnoozePrefs @Inject constructor(@ApplicationContext context: Context) {
     // ── Snooze duration slots (in minutes) ────────────────────────────────────
 
     var slot1: Int
-        get() = prefs.getInt("slot1", 15)
+        get() = prefs.getInt("slot1", 30)
         set(v) { prefs.edit().putInt("slot1", v).apply() }
 
     var slot2: Int
-        get() = prefs.getInt("slot2", 30)
+        get() = prefs.getInt("slot2", 60)
         set(v) { prefs.edit().putInt("slot2", v).apply() }
 
     var slot3: Int
-        get() = prefs.getInt("slot3", 60)
+        get() = prefs.getInt("slot3", 120)
         set(v) { prefs.edit().putInt("slot3", v).apply() }
 
     // ── Home location ─────────────────────────────────────────────────────────

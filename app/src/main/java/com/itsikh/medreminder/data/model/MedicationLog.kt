@@ -3,7 +3,7 @@ package com.itsikh.medreminder.data.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-enum class LogStatus { PENDING, TAKEN, SNOOZED, MISSED }
+enum class LogStatus { PENDING, TAKEN, SNOOZED, MISSED, SKIPPED }
 
 @Entity(tableName = "medication_logs")
 data class MedicationLog(
