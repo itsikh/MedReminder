@@ -35,6 +35,34 @@ class NotificationHelper @Inject constructor(
         const val STOCK_WARN_NOTIF_OFFSET     = 50_000
         /** Notification ID offset for critical-level stock notifications. */
         const val STOCK_CRITICAL_NOTIF_OFFSET = 60_000
+        /** Notification ID for the test notification sent from Settings. */
+        const val TEST_NOTIF_ID               = 90_000
+    }
+
+    /**
+     * Posts a test notification on the same channel real medication reminders use,
+     * so the user can verify sound, vibration, and visibility end-to-end.
+     */
+    fun showTestNotification() {
+        val openAppPi = PendingIntent.getActivity(
+            context, TEST_NOTIF_ID,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val body = "If you can see this, medication reminders can reach you."
+        val builder = NotificationCompat.Builder(context, snoozePrefs.currentMedChannelId)
+            .setSmallIcon(R.drawable.ic_notification_pill)
+            .setContentTitle("🔔 Test reminder")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(openAppPi)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        context.getSystemService(NotificationManager::class.java)?.notify(TEST_NOTIF_ID, builder.build())
     }
 
     fun showMedicationNotification(

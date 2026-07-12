@@ -1,6 +1,9 @@
 package com.itsikh.medreminder.ui.screens.settings
 
+import android.Manifest
 import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Visibility
@@ -54,12 +58,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -67,6 +73,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.itsikh.medreminder.AppConfig
 import com.itsikh.medreminder.BuildConfig
 import com.itsikh.medreminder.ui.components.SectionHeader
@@ -120,8 +129,28 @@ fun SettingsScreen(
     val exportState            by viewModel.exportState.collectAsState()
     val restoreState           by viewModel.restoreState.collectAsState()
     val notificationSoundUri   by viewModel.notificationSoundUri.collectAsState()
+    val notificationHealth     by viewModel.notificationHealth.collectAsState()
 
     val context = LocalContext.current
+
+    // Re-run the notification health checks every time the screen (re)gains focus,
+    // e.g. after the user returns from a system settings page opened by a Fix button.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshNotificationHealth()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.refreshNotificationHealth()
+        // Denied (possibly "don't ask again") — the dialog won't help, send to system settings
+        if (!granted) context.startActivity(appNotificationSettingsIntent(context))
+    }
 
     // Derive a human-readable name for the currently selected notification sound
     val notificationSoundName = remember(notificationSoundUri) {
@@ -168,6 +197,7 @@ fun SettingsScreen(
     var showRestoreDialog     by remember { mutableStateOf(false) }
     var showClearLogsDialog   by remember { mutableStateOf(false) }
     var logsCleared           by remember { mutableStateOf(false) }
+    var testNotificationSent  by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -258,6 +288,104 @@ fun SettingsScreen(
                                 soundPickerLauncher.launch(intent)
                             }
                         ) { Text("Change") }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Notification health checks + test notification
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Default.NotificationsActive, null, tint = MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f)) {
+                                Text("Notification Check", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "Verify reminders can reach this device",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        notificationHealth?.let { health ->
+                            HealthCheckRow(
+                                label = "Notifications allowed",
+                                ok = health.notificationsEnabled,
+                                onFix = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        context.startActivity(appNotificationSettingsIntent(context))
+                                    }
+                                }
+                            )
+                            HealthCheckRow(
+                                label = "Reminder channel enabled",
+                                ok = health.channelExists && health.channelEnabled,
+                                onFix = {
+                                    val intent = if (health.channelExists) {
+                                        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                            .putExtra(Settings.EXTRA_CHANNEL_ID, health.channelId)
+                                    } else {
+                                        appNotificationSettingsIntent(context)
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            )
+                            HealthCheckRow(
+                                label = "Exact alarms allowed",
+                                ok = health.exactAlarmsAllowed,
+                                onFix = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        context.startActivity(
+                                            Intent(
+                                                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                                Uri.parse("package:${context.packageName}")
+                                            )
+                                        )
+                                    }
+                                }
+                            )
+                            HealthCheckRow(
+                                label = "Battery optimization off",
+                                ok = health.batteryUnrestricted,
+                                onFix = {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                            Uri.parse("package:${context.packageName}")
+                                        )
+                                    )
+                                }
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.sendTestNotification()
+                                testNotificationSent = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.NotificationsActive, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Send Test Notification")
+                        }
+                        if (testNotificationSent) {
+                            Text(
+                                "Test sent — it should appear in your notification shade with the reminder sound. If not, fix the items above.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
 
@@ -669,5 +797,37 @@ fun SettingsScreen(
                 TextButton(onClick = { showClearLogsDialog = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+/** Opens this app's system notification settings page. */
+private fun appNotificationSettingsIntent(context: Context): Intent =
+    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+
+/**
+ * One line of the notification health check: a pass/fail icon, the check name,
+ * and a "Fix" button that opens the relevant system settings when failing.
+ */
+@Composable
+private fun HealthCheckRow(
+    label: String,
+    ok: Boolean,
+    onFix: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            if (ok) Icons.Default.CheckCircle else Icons.Default.Warning,
+            contentDescription = if (ok) "OK" else "Needs attention",
+            tint = if (ok) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        if (!ok) {
+            TextButton(onClick = onFix) { Text("Fix") }
+        }
     }
 }

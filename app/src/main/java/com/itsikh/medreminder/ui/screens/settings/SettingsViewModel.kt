@@ -1,12 +1,16 @@
 package com.itsikh.medreminder.ui.screens.settings
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsikh.medreminder.AppConfig
@@ -15,6 +19,7 @@ import com.itsikh.medreminder.data.preferences.SnoozePrefs
 import com.itsikh.medreminder.logging.AppLogger
 import com.itsikh.medreminder.logging.DebugSettings
 import com.itsikh.medreminder.logging.LogLevel
+import com.itsikh.medreminder.notification.NotificationHelper
 import com.itsikh.medreminder.security.SecureKeyManager
 import com.itsikh.medreminder.update.AppUpdateManager
 import com.itsikh.medreminder.update.UpdateInfo
@@ -62,6 +67,7 @@ class SettingsViewModel @Inject constructor(
     private val secureKeyManager: SecureKeyManager,
     private val updateManager: AppUpdateManager,
     private val snoozePrefs: SnoozePrefs,
+    private val notificationHelper: NotificationHelper,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -286,6 +292,63 @@ class SettingsViewModel @Inject constructor(
         _restoreState.value = RestoreState.Idle
     }
 
+    // ── Notification health check ─────────────────────────────────────────────
+
+    /**
+     * Snapshot of everything that must be true for a reminder to actually reach
+     * the user. Each flag maps to a fixable system setting.
+     */
+    data class NotificationHealth(
+        /** App-level: POST_NOTIFICATIONS granted and notifications not blocked for the app. */
+        val notificationsEnabled: Boolean,
+        /** The active medication channel ID being checked. */
+        val channelId: String,
+        /** The active medication channel exists (a missing channel drops notifications silently). */
+        val channelExists: Boolean,
+        /** The channel is not set to "no importance" (user-blocked in system settings). */
+        val channelEnabled: Boolean,
+        /** SCHEDULE_EXACT_ALARM still granted — reminders fire at the exact time. */
+        val exactAlarmsAllowed: Boolean,
+        /** App is exempt from battery optimization, so Doze won't delay alarms. */
+        val batteryUnrestricted: Boolean
+    ) {
+        val allOk: Boolean
+            get() = notificationsEnabled && channelExists && channelEnabled &&
+                exactAlarmsAllowed && batteryUnrestricted
+    }
+
+    private val _notificationHealth = MutableStateFlow<NotificationHealth?>(null)
+    val notificationHealth: StateFlow<NotificationHealth?> = _notificationHealth
+
+    /** Re-runs all notification delivery checks. Call on screen entry and on resume. */
+    fun refreshNotificationHealth() {
+        val manager = context.getSystemService(NotificationManager::class.java)!!
+        val channelId = snoozePrefs.currentMedChannelId
+        val channel = manager.getNotificationChannel(channelId)
+        val alarmManager = context.getSystemService(AlarmManager::class.java)!!
+        val powerManager = context.getSystemService(PowerManager::class.java)!!
+
+        val health = NotificationHealth(
+            notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled(),
+            channelId = channelId,
+            channelExists = channel != null,
+            channelEnabled = channel?.importance != NotificationManager.IMPORTANCE_NONE,
+            exactAlarmsAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                alarmManager.canScheduleExactAlarms(),
+            batteryUnrestricted = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        )
+        _notificationHealth.value = health
+        if (!health.allOk) {
+            AppLogger.w(TAG, "Notification health check failed: $health")
+        }
+    }
+
+    /** Posts a test notification on the real medication channel. */
+    fun sendTestNotification() {
+        notificationHelper.showTestNotification()
+        AppLogger.i(TAG, "Test notification sent on channel ${snoozePrefs.currentMedChannelId}")
+    }
+
     // ── Notification sound ────────────────────────────────────────────────────────
 
     private val _notificationSoundUri = MutableStateFlow(snoozePrefs.notificationSoundUri)
@@ -330,6 +393,7 @@ class SettingsViewModel @Inject constructor(
             snoozePrefs.notificationChannelVersion = newVersion
             _notificationSoundUri.value = uriStr
             AppLogger.i(TAG, "Notification sound updated")
+            refreshNotificationHealth()
         }
     }
 
