@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.itsikh.medreminder.data.model.LogStatus
+import com.itsikh.medreminder.data.preferences.SnoozePrefs
 import com.itsikh.medreminder.data.repository.MedicationRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,7 @@ class ActionReceiver : BroadcastReceiver() {
     @Inject lateinit var notificationHelper: NotificationHelper
     @Inject lateinit var alarmScheduler: AlarmScheduler
     @Inject lateinit var geofenceManager: GeofenceManager
+    @Inject lateinit var snoozePrefs: SnoozePrefs
 
     override fun onReceive(context: Context, intent: Intent) {
         val result = goAsync()
@@ -48,8 +50,18 @@ class ActionReceiver : BroadcastReceiver() {
 
                 when (action) {
                     NotificationHelper.ACTION_TAKEN -> {
+                        // A stale notification can be tapped after the dose was already
+                        // recorded in the app. Without this guard stock is decremented twice.
+                        val log = repository.getLogById(logId)
+                        if (log != null && log.status == LogStatus.TAKEN) {
+                            notificationHelper.cancelNotification(notifId)
+                            return@launch
+                        }
                         repository.updateLogStatus(logId, LogStatus.TAKEN, System.currentTimeMillis())
                         notificationHelper.cancelNotification(notifId)
+                        // Drop anything still queued for this dose, but not the daily repeat.
+                        alarmScheduler.cancelSnoozeAlarm(scheduleId)
+                        geofenceManager.removeGeofence(logId)
                         val med = repository.getMedicationById(medicationId)
                         if (med != null && med.stockQuantity >= 0) {
                             repository.decrementStock(medicationId)
@@ -74,6 +86,8 @@ class ActionReceiver : BroadcastReceiver() {
                         // occurrence was already scheduled when the alarm fired.
                         repository.updateLogStatus(logId, LogStatus.SKIPPED, null)
                         notificationHelper.cancelNotification(notifId)
+                        alarmScheduler.cancelSnoozeAlarm(scheduleId)
+                        geofenceManager.removeGeofence(logId)
                     }
 
                     NotificationHelper.ACTION_SNOOZE_SLOT_1,
@@ -84,20 +98,37 @@ class ActionReceiver : BroadcastReceiver() {
                     }
 
                     NotificationHelper.ACTION_SNOOZE_TONIGHT -> {
+                        // Rolls to tomorrow when it is already past the evening slot —
+                        // otherwise "tonight" collapsed to a 2-minute snooze after 20:00.
                         val tonight = Calendar.getInstance().apply {
-                            set(Calendar.HOUR_OF_DAY, 20); set(Calendar.MINUTE, 0)
+                            set(Calendar.HOUR_OF_DAY, EVENING_HOUR); set(Calendar.MINUTE, 0)
                             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                            if (timeInMillis <= System.currentTimeMillis() + MIN_SNOOZE_MS) {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                            }
                         }.timeInMillis
-                        val delay = (tonight - System.currentTimeMillis()).coerceAtLeast(2 * 60_000L)
+                        val delay = (tonight - System.currentTimeMillis()).coerceAtLeast(MIN_SNOOZE_MS)
                         snooze(scheduleId, medicationId, medName, dosage, logId, notifId, scheduledTime, delay)
                     }
 
                     NotificationHelper.ACTION_SNOOZE_LOCATION -> {
-                        repository.updateLogStatus(logId, LogStatus.SNOOZED, null)
-                        geofenceManager.registerHomeGeofence(
+                        // Drop any time-based snooze so the two don't both fire.
+                        alarmScheduler.cancelSnoozeAlarm(scheduleId)
+                        val armed = geofenceManager.registerHomeGeofence(
                             logId, scheduleId, medicationId, medName, dosage, scheduledTime
                         )
-                        notificationHelper.cancelNotification(notifId)
+                        if (armed) {
+                            repository.updateLogStatus(logId, LogStatus.SNOOZED, null)
+                            notificationHelper.cancelNotification(notifId)
+                        } else {
+                            // Nothing will wake us on arrival — fall back to a time snooze
+                            // rather than dismissing the reminder into the void.
+                            val fallbackMs = snoozePrefs.slot1.coerceAtLeast(1) * 60_000L
+                            snooze(
+                                scheduleId, medicationId, medName, dosage,
+                                logId, notifId, scheduledTime, fallbackMs
+                            )
+                        }
                     }
                 }
             } finally {
@@ -110,12 +141,27 @@ class ActionReceiver : BroadcastReceiver() {
         scheduleId: Int, medicationId: Int, medName: String, dosage: String,
         logId: Int, notifId: Int, scheduledTime: Long, delayMs: Long
     ) {
-        repository.updateLogStatus(logId, LogStatus.SNOOZED, null)
         val schedule = repository.getScheduleById(scheduleId)
         val medication = repository.getMedicationById(medicationId)
-        if (schedule != null && medication != null) {
-            alarmScheduler.scheduleSnoozeAlarm(schedule, medication, logId, delayMs)
+        if (schedule == null || medication == null || !medication.isActive) {
+            // The medication or time slot is gone. There is nothing left to remind about,
+            // so close the reminder out instead of marking it snoozed and dropping the
+            // notification with no alarm behind it.
+            repository.updateLogStatus(logId, LogStatus.SKIPPED, null)
+            notificationHelper.cancelNotification(notifId)
+            alarmScheduler.cancelAllAlarms(scheduleId)
+            geofenceManager.removeGeofence(logId)
+            return
         }
+        repository.updateLogStatus(logId, LogStatus.SNOOZED, null)
+        // Switching to a time snooze supersedes any pending home-arrival geofence.
+        geofenceManager.removeGeofence(logId)
+        alarmScheduler.scheduleSnoozeAlarm(schedule, medication, logId, delayMs)
         notificationHelper.cancelNotification(notifId)
+    }
+
+    private companion object {
+        const val EVENING_HOUR = 20
+        const val MIN_SNOOZE_MS = 2 * 60_000L
     }
 }

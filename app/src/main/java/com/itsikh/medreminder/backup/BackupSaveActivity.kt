@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 
 /**
  * Transparent, no-UI activity that opens the system file picker so the user can choose
@@ -54,16 +55,23 @@ class BackupSaveActivity : ComponentActivity() {
         val path = tempFilePath
         if (uri != null && path != null) {
             lifecycleScope.launch(Dispatchers.IO) {
+                var saved = false
                 try {
-                    contentResolver.openOutputStream(uri, "wt")?.use { out ->
-                        File(path).inputStream().use { it.copyTo(out) }
-                    }
+                    val out = contentResolver.openOutputStream(uri, "wt")
+                        ?: throw IOException("Cannot write to the selected location")
+                    out.use { File(path).inputStream().use { input -> input.copyTo(out) } }
+                    saved = true
                     AppLogger.i(TAG, "Backup saved to $uri")
                 } catch (e: Exception) {
                     AppLogger.w(TAG, "Failed to save backup: ${e.message}")
                 } finally {
-                    if (deleteTempOnSave) File(path).delete()
-                    dismissNotification()
+                    // Only discard the temp copy and dismiss the notification once the data
+                    // is actually written — doing it unconditionally destroyed the backup on
+                    // any write error and left the user no way to retry.
+                    if (saved) {
+                        if (deleteTempOnSave) File(path).delete()
+                        dismissNotification()
+                    }
                     withContext(Dispatchers.Main) { finish() }
                 }
             }

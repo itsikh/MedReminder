@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.itsikh.medreminder.AppConfig
@@ -103,29 +104,35 @@ class NotificationHelper @Inject constructor(
 
         val s1ms = snoozePrefs.slot1 * 60_000L
         val s2ms = snoozePrefs.slot2 * 60_000L
+        val s3ms = snoozePrefs.slot3 * 60_000L
 
         val dosageText = if (dosage.isNotBlank()) " · $dosage" else ""
         val bodyText = "Time to take your $medicationName$dosageText"
 
         // The system notification template shows at most 3 action buttons, so the
-        // expanded and heads-up views use a custom layout that fits 4:
-        // Took it → slot1 snooze → At home (or slot2 snooze if no home set) → Skip today.
+        // expanded and heads-up views use a custom layout that fits 6:
+        // row 1 — Took it / At home / Skip today, row 2 — the three snooze slots.
         // A fresh RemoteViews instance is required per view — they must not be shared.
         fun actionViews(): RemoteViews {
             val rv = RemoteViews(context.packageName, R.layout.notification_medication)
             rv.setTextViewText(R.id.notif_title, "💊 $medicationName")
             rv.setTextViewText(R.id.notif_text, bodyText)
             rv.setOnClickPendingIntent(R.id.btn_taken, actionPi(ACTION_TAKEN, notifId * 10 + 1))
-            rv.setTextViewText(R.id.btn_snooze, "⏰ ${formatMin(snoozePrefs.slot1)}")
-            rv.setOnClickPendingIntent(R.id.btn_snooze, actionPi(ACTION_SNOOZE_SLOT_1, notifId * 10 + 2, s1ms))
-            if (snoozePrefs.hasHomeLocation) {
-                rv.setTextViewText(R.id.btn_third, "📍 Home")
-                rv.setOnClickPendingIntent(R.id.btn_third, actionPi(ACTION_SNOOZE_LOCATION, notifId * 10 + 6))
-            } else {
-                rv.setTextViewText(R.id.btn_third, "⏰ ${formatMin(snoozePrefs.slot2)}")
-                rv.setOnClickPendingIntent(R.id.btn_third, actionPi(ACTION_SNOOZE_SLOT_2, notifId * 10 + 3, s2ms))
-            }
             rv.setOnClickPendingIntent(R.id.btn_skip, actionPi(ACTION_SKIP_TODAY, notifId * 10 + 7))
+
+            if (snoozePrefs.hasHomeLocation) {
+                rv.setViewVisibility(R.id.btn_home, View.VISIBLE)
+                rv.setOnClickPendingIntent(R.id.btn_home, actionPi(ACTION_SNOOZE_LOCATION, notifId * 10 + 6))
+            } else {
+                rv.setViewVisibility(R.id.btn_home, View.GONE)
+            }
+
+            rv.setTextViewText(R.id.btn_snooze1, "⏰ ${formatMin(snoozePrefs.slot1)}")
+            rv.setOnClickPendingIntent(R.id.btn_snooze1, actionPi(ACTION_SNOOZE_SLOT_1, notifId * 10 + 2, s1ms))
+            rv.setTextViewText(R.id.btn_snooze2, "⏰ ${formatMin(snoozePrefs.slot2)}")
+            rv.setOnClickPendingIntent(R.id.btn_snooze2, actionPi(ACTION_SNOOZE_SLOT_2, notifId * 10 + 3, s2ms))
+            rv.setTextViewText(R.id.btn_snooze3, "⏰ ${formatMin(snoozePrefs.slot3)}")
+            rv.setOnClickPendingIntent(R.id.btn_snooze3, actionPi(ACTION_SNOOZE_SLOT_3, notifId * 10 + 4, s3ms))
             return rv
         }
 

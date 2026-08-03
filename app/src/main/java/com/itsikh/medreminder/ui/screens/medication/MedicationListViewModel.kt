@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsikh.medreminder.data.model.MedicationWithSchedules
 import com.itsikh.medreminder.data.repository.MedicationRepository
-import com.itsikh.medreminder.notification.AlarmScheduler
+import com.itsikh.medreminder.notification.ReminderCleanup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -13,7 +13,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MedicationListViewModel @Inject constructor(
     private val repository: MedicationRepository,
-    private val alarmScheduler: AlarmScheduler
+    private val reminderCleanup: ReminderCleanup
 ) : ViewModel() {
 
     val medications: StateFlow<List<MedicationWithSchedules>> =
@@ -22,9 +22,9 @@ class MedicationListViewModel @Inject constructor(
 
     fun delete(medId: Int) {
         viewModelScope.launch {
-            repository.getSchedulesForMedication(medId).forEach {
-                alarmScheduler.cancelAlarm(it.id)
-            }
+            // Snooze/nag alarms and home geofences outlive the schedule rows, so they have
+            // to be torn down explicitly or a deleted medication keeps reminding the user.
+            reminderCleanup.cancelAllForMedication(medId)
             repository.deactivateMedication(medId)
         }
     }

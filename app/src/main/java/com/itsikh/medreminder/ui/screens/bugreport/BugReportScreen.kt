@@ -1,5 +1,7 @@
 package com.itsikh.medreminder.ui.screens.bugreport
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,7 +44,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +56,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,16 +144,14 @@ fun BugReportScreen(
             if (screenshotUri != null) {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     val context = LocalContext.current
-                    val bitmap = remember(screenshotUri) {
-                        screenshotUri?.let { uri ->
-                            try {
-                                context.contentResolver.openInputStream(uri)?.use { stream ->
-                                    BitmapFactory.decodeStream(stream)
-                                }
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
+                    // Decoded off the composition thread and downsampled to roughly the
+                    // preview size: a full-resolution camera image decoded inline is tens of
+                    // megabytes and can blow up on a memory-constrained device.
+                    var bitmap by remember(screenshotUri) { mutableStateOf<Bitmap?>(null) }
+                    LaunchedEffect(screenshotUri) {
+                        val uri = screenshotUri
+                        bitmap = if (uri == null) null
+                        else withContext(Dispatchers.IO) { decodePreview(context, uri) }
                     }
                     bitmap?.let {
                         Image(
@@ -303,3 +307,26 @@ fun BugReportScreen(
         )
     }
 }
+
+/**
+ * Decodes [uri] downsampled to at most [PREVIEW_MAX_DIM] on its longest edge.
+ *
+ * Reads the bounds first so `inSampleSize` can be chosen without ever allocating the
+ * full-size bitmap. Returns null on any I/O or decoding failure.
+ */
+private fun decodePreview(context: Context, uri: Uri): Bitmap? = try {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+
+    var sample = 1
+    while (bounds.outWidth / sample > PREVIEW_MAX_DIM || bounds.outHeight / sample > PREVIEW_MAX_DIM) {
+        sample *= 2
+    }
+
+    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+} catch (_: Exception) {
+    null
+}
+
+private const val PREVIEW_MAX_DIM = 1024

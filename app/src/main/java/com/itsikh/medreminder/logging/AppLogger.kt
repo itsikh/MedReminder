@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.itsikh.medreminder.BuildConfig
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedDeque
 
@@ -42,7 +42,14 @@ object AppLogger {
     private const val BUFFER_SIZE = 5000
 
     private val logBuffer = ConcurrentLinkedDeque<LogEntry>()
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+
+    /**
+     * [DateTimeFormatter] rather than `SimpleDateFormat`, which is not thread-safe: logging
+     * happens from broadcast receivers, IO dispatchers and the main thread at once, and
+     * concurrent `format()` calls on a shared instance can corrupt output or throw.
+     */
+    private val timestampFormat: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
 
     /**
      * Active log level. Entries below this level are discarded.
@@ -116,7 +123,7 @@ object AppLogger {
         if (level.priority < currentLevel.priority) return
 
         val entry = LogEntry(
-            timestamp = dateFormat.format(Date()),
+            timestamp = LocalDateTime.now().format(timestampFormat),
             level = level,
             tag = tag,
             message = message,
@@ -171,6 +178,9 @@ object AppLogger {
         val recent = if (allLogs.size > count) allLogs.subList(allLogs.size - count, allLogs.size) else allLogs
         return recent.joinToString(separator = "\n") { entry -> entry.toString() }
     }
+
+    /** Number of entries currently buffered. Cheap — no string building involved. */
+    fun entryCount(): Int = logBuffer.size
 
     /** Clears all entries from the in-memory buffer. Does not affect crash log files. */
     fun clear() {

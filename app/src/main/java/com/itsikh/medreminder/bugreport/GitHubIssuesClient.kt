@@ -218,8 +218,9 @@ class GitHubIssuesClient(
             // Google/Gemini API keys
             Regex("AIza[a-zA-Z0-9_-]{35}", RegexOption.MULTILINE) to "[GEMINI_API_KEY_REDACTED]",
             // GitHub tokens
-            Regex("ghp_[a-zA-Z0-9]{36}", RegexOption.MULTILINE) to "[GITHUB_TOKEN_REDACTED]",
-            Regex("gho_[a-zA-Z0-9]{36}", RegexOption.MULTILINE) to "[GITHUB_TOKEN_REDACTED]",
+            Regex("gh[posru]_[a-zA-Z0-9]{36,}", RegexOption.MULTILINE) to "[GITHUB_TOKEN_REDACTED]",
+            // Fine-grained PATs, which use a longer prefixed format
+            Regex("github_pat_[a-zA-Z0-9_]{22,}", RegexOption.MULTILINE) to "[GITHUB_TOKEN_REDACTED]",
             // Anthropic/Claude API keys
             Regex("sk-ant-[a-zA-Z0-9_-]{95,}", RegexOption.MULTILINE) to "[CLAUDE_API_KEY_REDACTED]",
             // Generic bearer tokens

@@ -45,8 +45,8 @@ class CrashAutoReporter @Inject constructor(
      * It is safe to call on every launch; it no-ops when no crash logs exist.
      */
     suspend fun checkAndReport() {
-        if (!crashLogRepository.hasCrashLogs()) return
-        val crashLog = crashLogRepository.getLatestCrashLog() ?: return
+        val crashFile = crashLogRepository.latestCrashLogFile() ?: return
+        val crashLog = runCatching { crashFile.readText() }.getOrNull() ?: return
 
         AppLogger.i(TAG, "Crash log detected — filing auto crash report")
 
@@ -99,7 +99,9 @@ class CrashAutoReporter @Inject constructor(
 
         if (result.success) {
             AppLogger.i(TAG, "Auto crash report submitted: ${result.issueUrl}")
-            crashLogRepository.clearCrashLogs()
+            // Only the file that was actually reported — any earlier crash gets its own
+            // report on a later launch.
+            crashLogRepository.deleteCrashLog(crashFile)
         } else {
             // Leave crash log on disk — it will be retried on next launch
             AppLogger.w(TAG, "Auto crash report failed (will retry next launch): ${result.error}")

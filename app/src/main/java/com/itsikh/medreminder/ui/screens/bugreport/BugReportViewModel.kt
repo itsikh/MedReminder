@@ -128,8 +128,12 @@ class BugReportViewModel @Inject constructor(
     /** `true` if crash log files exist in [CrashLogRepository]. Evaluated once at construction. */
     val hasCrashLogs: Boolean = crashLogRepository.hasCrashLogs()
 
-    /** Total number of log lines currently in [AppLogger]'s buffer. Shown in the report info card. */
-    val logLineCount: Int = AppLogger.exportLogs().lines().size
+    /**
+     * Number of entries currently in [AppLogger]'s buffer. Shown in the report info card.
+     * Counted directly rather than by materialising and splitting the whole buffer, which
+     * built a multi-megabyte string on the main thread just to get a number.
+     */
+    val logLineCount: Int = AppLogger.entryCount()
 
     /**
      * Switches the active report mode. When switching to [ReportMode.USER_FEEDBACK],

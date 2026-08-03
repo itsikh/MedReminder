@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -68,7 +68,7 @@ fun AppNavHost() {
                                     launchSingleTop = true; restoreState = true
                                 }
                             },
-                            icon = { Icon(Icons.Default.List, null) },
+                            icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
                             label = { Text("Medications") }
                         )
                         NavigationBarItem(

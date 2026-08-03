@@ -42,6 +42,9 @@ interface MedicationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedule(schedule: MedicationSchedule): Long
 
+    @Update
+    suspend fun updateSchedule(schedule: MedicationSchedule)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedules(schedules: List<MedicationSchedule>)
 
@@ -67,4 +70,26 @@ interface MedicationDao {
 
     @Query("SELECT * FROM medication_logs WHERE id = :id")
     suspend fun getLogById(id: Int): MedicationLog?
+
+    /**
+     * The most recent log for one schedule inside a time window. Used to detect a dose
+     * already recorded from the app before its alarm fired, which would otherwise create
+     * a second log and an unwanted notification.
+     */
+    @Query(
+        "SELECT * FROM medication_logs WHERE scheduleId = :scheduleId " +
+            "AND scheduledTimeMillis >= :startMs AND scheduledTimeMillis < :endMs " +
+            "ORDER BY id DESC LIMIT 1"
+    )
+    suspend fun getLogForScheduleInRange(scheduleId: Int, startMs: Long, endMs: Long): MedicationLog?
+
+    /**
+     * Closes out doses left hanging from earlier days. Nothing else ever moves a log off
+     * PENDING/SNOOZED, so without this the history list shows them as pending forever.
+     */
+    @Query(
+        "UPDATE medication_logs SET status = 'MISSED' " +
+            "WHERE scheduledTimeMillis < :beforeMs AND status IN ('PENDING', 'SNOOZED')"
+    )
+    suspend fun markStaleLogsMissed(beforeMs: Long): Int
 }

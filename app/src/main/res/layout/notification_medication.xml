@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Custom expanded/heads-up layout for medication reminders.
-     Used with DecoratedCustomViewStyle to fit 4 action buttons —
-     the system template caps notification actions at 3. -->
+     Used with DecoratedCustomViewStyle to fit 6 action buttons —
+     the system template caps notification actions at 3.
+     Row 1: Took it / At home / Skip.  Row 2: the three snooze slots. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -22,13 +23,13 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:textAppearance="@style/TextAppearance.Compat.Notification"
-        android:maxLines="2"
+        android:maxLines="1"
         android:ellipsize="end" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:orientation="horizontal">
 
         <TextView
@@ -36,17 +37,33 @@
             style="@style/NotifActionButton"
             android:text="✅ Took it" />
 
+        <!-- Hidden when no home location is saved; the weights redistribute. -->
         <TextView
-            android:id="@+id/btn_snooze"
-            style="@style/NotifActionButton" />
-
-        <TextView
-            android:id="@+id/btn_third"
-            style="@style/NotifActionButton" />
+            android:id="@+id/btn_home"
+            style="@style/NotifActionButton"
+            android:text="📍 Home" />
 
         <TextView
             android:id="@+id/btn_skip"
             style="@style/NotifActionButton"
             android:text="🚫 Skip" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_snooze1"
+            style="@style/NotifActionButton" />
+
+        <TextView
+            android:id="@+id/btn_snooze2"
+            style="@style/NotifActionButton" />
+
+        <TextView
+            android:id="@+id/btn_snooze3"
+            style="@style/NotifActionButton" />
     </LinearLayout>
 </LinearLayout>

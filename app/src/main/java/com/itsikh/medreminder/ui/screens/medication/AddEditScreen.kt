@@ -10,8 +10,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -61,7 +61,7 @@ fun AddEditScreen(
             TopAppBar(
                 title = { Text(if (isEditMode) "Edit Medication" else "Add Medication", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
                 actions = {
                     if (isEditMode) {
@@ -119,7 +119,14 @@ fun AddEditScreen(
 
             // ── Days of week ─────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Repeat on", style = MaterialTheme.typography.labelLarge)
+                Text("Repeat on *", style = MaterialTheme.typography.labelLarge)
+                if (viewModel.daysOfWeek == 0) {
+                    Text(
+                        "Pick at least one day — a reminder with no days can never fire.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DAY_LABELS.forEachIndexed { i, label ->
                         val calDay = DAY_CAL_VALUES[i]
@@ -224,7 +231,7 @@ fun AddEditScreen(
             Button(
                 onClick = { viewModel.save(medId) },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                enabled = viewModel.name.isNotBlank() && viewModel.timeSlots.isNotEmpty()
+                enabled = viewModel.isValid
             ) {
                 Text(if (isEditMode) "Save changes" else "Add medication",
                     style = MaterialTheme.typography.labelLarge)

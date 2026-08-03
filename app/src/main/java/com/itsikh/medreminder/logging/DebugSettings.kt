@@ -8,10 +8,13 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,8 +73,12 @@ class DebugSettings @Inject constructor(
     }
 
     init {
-        // Apply persisted log level immediately so AppLogger is correct from app start
-        runBlocking { AppLogger.currentLevel = logLevel.first() }
+        // Applied asynchronously: reading DataStore here used to block whichever thread built
+        // the Hilt graph — normally the main thread during startup — risking an ANR. The few
+        // log lines emitted before this lands use the build-type default.
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            runCatching { AppLogger.currentLevel = logLevel.first() }
+        }
     }
 
     /**

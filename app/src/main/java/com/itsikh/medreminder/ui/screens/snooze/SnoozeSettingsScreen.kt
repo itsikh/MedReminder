@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.itsikh.medreminder.notification.GeofenceManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +37,12 @@ fun SnoozeSettingsScreen(
         if (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
             viewModel.captureCurrentLocationAsHome()
         }
+    }
+
+    // Only the toolbar arrow used to persist these fields, so leaving via the system back
+    // gesture silently discarded every edit on this screen.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.saveSlots() }
     }
 
     Scaffold(
@@ -61,7 +69,7 @@ fun SnoozeSettingsScreen(
             // ── Snooze durations ──────────────────────────────────────────────
             SectionHeader(Icons.Default.Timer, "Custom snooze durations")
             Text(
-                "Set three snooze lengths (in minutes) that appear as quick actions in your notifications.",
+                "Set three snooze lengths (in minutes). All three appear as quick actions in your notifications.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -92,25 +100,34 @@ fun SnoozeSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SlotField("Interval", viewModel.nagInterval, Modifier.weight(1f)) { viewModel.nagInterval = it }
-                Text(
-                    "Re-alert every ${formatMin(viewModel.nagInterval)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(2f)
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SlotField("Interval", viewModel.nagInterval, Modifier.weight(1f)) {
+                    viewModel.nagInterval = it
+                }
+                SlotField("Max times", viewModel.nagRepeatLimit, Modifier.weight(1f), suffix = "×") {
+                    viewModel.nagRepeatLimit = it
+                }
             }
+            Text(
+                if (viewModel.nagRepeatLimit <= 0) "Never re-alert"
+                else "Re-alert every ${formatMin(viewModel.nagInterval)}, up to " +
+                    "${viewModel.nagRepeatLimit} ${if (viewModel.nagRepeatLimit == 1) "time" else "times"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "Without a limit an unanswered reminder keeps alerting all night.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             HorizontalDivider()
 
             // ── Quiet hour cutoff ─────────────────────────────────────────────
-            SectionHeader(Icons.Default.NotificationsOff, "Stop reminders after")
+            SectionHeader(Icons.Default.NotificationsOff, "Quiet hours")
             Text(
-                "After this hour, unacknowledged reminders will be silently marked as missed without notifying you.",
+                "Inside this window, reminders are silently marked as missed instead of notifying you. " +
+                    "The window may cross midnight.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -136,7 +153,7 @@ fun SnoozeSettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "No reminders after:",
+                        "Quiet from:",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -145,15 +162,39 @@ fun SnoozeSettingsScreen(
                             TimePickerDialog(
                                 ctx,
                                 { _, h, _ -> viewModel.quietHour = h },
-                                viewModel.quietHour,
-                                0,
-                                true
+                                viewModel.quietHour, 0, true
                             ).show()
                         }
-                    ) {
-                        Text("%02d:00".format(viewModel.quietHour))
-                    }
+                    ) { Text("%02d:00".format(viewModel.quietHour)) }
                 }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Quiet until:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            TimePickerDialog(
+                                ctx,
+                                { _, h, _ -> viewModel.quietHourEnd = h },
+                                viewModel.quietHourEnd, 0, true
+                            ).show()
+                        }
+                    ) { Text("%02d:00".format(viewModel.quietHourEnd)) }
+                }
+                Text(
+                    if (viewModel.quietHour == viewModel.quietHourEnd)
+                        "⚠️ Start and end are the same — quiet hours will have no effect."
+                    else
+                        "Silent between %02d:00 and %02d:00".format(viewModel.quietHour, viewModel.quietHourEnd),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (viewModel.quietHour == viewModel.quietHourEnd)
+                        MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
             }
 
             HorizontalDivider()
@@ -219,6 +260,125 @@ fun SnoozeSettingsScreen(
                 }
             }
 
+            if (viewModel.hasHomeLocation) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Arrival detection",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "Location alerts trigger at the edge of the radius, so the reminder can pop " +
+                        "while you're still driving past. The delay waits that long after you " +
+                        "arrive — and only notifies if you're still home. 0 notifies immediately.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SlotField("Radius", viewModel.homeRadius, Modifier.weight(1f), suffix = "m") {
+                        viewModel.homeRadius = it
+                    }
+                    SlotField("Delay", viewModel.homeArrivalDelay, Modifier.weight(1f)) {
+                        viewModel.homeArrivalDelay = it
+                    }
+                }
+                Text(
+                    buildString {
+                        append("Trigger within ${viewModel.homeRadius} m")
+                        if (viewModel.homeArrivalDelay <= 0) append(", notify as soon as I arrive")
+                        else append(", notify ${formatMin(viewModel.homeArrivalDelay)} after I get home")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (viewModel.homeRadius < 100) {
+                    Text(
+                        "⚠️ Below 100 m, Android geofencing gets unreliable and may not fire at " +
+                            "all. Prefer a wider radius plus a longer delay.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Text(
+                    "Allowed: ${GeofenceManager.MIN_RADIUS_METERS}–${GeofenceManager.MAX_RADIUS_METERS} m. " +
+                        "Changes apply to the next \"At home\" snooze.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // ── Home Wi-Fi ────────────────────────────────────────────────
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Home Wi-Fi (recommended)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "Joining your home network proves you're inside, not driving past — so the " +
+                        "reminder fires right away instead of waiting out the delay. The delay " +
+                        "still applies when Wi-Fi is off or you're away from the house.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (viewModel.homeWifiSsid.isNotBlank()) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "📶 ${viewModel.homeWifiSsid}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.captureCurrentWifiAsHome() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Update network") }
+                        OutlinedButton(
+                            onClick = { viewModel.clearHomeWifi() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) { Text("Remove") }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { viewModel.captureCurrentWifiAsHome() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Wifi, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Use current Wi-Fi network as home")
+                    }
+                }
+
+                if (viewModel.wifiLoading) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Reading Wi-Fi name…", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                viewModel.wifiError?.let { err ->
+                    Text(err, color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
             if (viewModel.locationLoading) {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -250,12 +410,20 @@ private fun SectionHeader(icon: androidx.compose.ui.graphics.vector.ImageVector,
 }
 
 @Composable
-private fun SlotField(label: String, value: Int, modifier: Modifier, onChange: (Int) -> Unit) {
+private fun SlotField(
+    label: String,
+    value: Int,
+    modifier: Modifier,
+    suffix: String = "min",
+    onChange: (Int) -> Unit
+) {
     OutlinedTextField(
-        value = if (value <= 0) "" else value.toString(),
-        onValueChange = { s -> s.toIntOrNull()?.let { onChange(it) } },
+        value = if (value < 0) "" else value.toString(),
+        // Clearing the field means 0 — the only way to type a leading zero, which the
+        // home-arrival delay uses to mean "notify immediately".
+        onValueChange = { s -> if (s.isEmpty()) onChange(0) else s.toIntOrNull()?.let { onChange(it) } },
         label = { Text(label) },
-        suffix = { Text("min") },
+        suffix = { Text(suffix) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         singleLine = true,
         modifier = modifier

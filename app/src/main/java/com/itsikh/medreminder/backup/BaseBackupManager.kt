@@ -12,6 +12,7 @@ import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -169,15 +170,28 @@ abstract class BaseBackupManager(
             extractDir.mkdirs()
 
             try {
-                // Extract ZIP
+                // Extract ZIP. Entry names are attacker-controlled — a name like
+                // "../../databases/app.db" would otherwise escape extractDir and overwrite
+                // app files (Zip Slip), so every resolved path is checked to stay inside.
+                val extractRoot = extractDir.canonicalFile
                 ZipInputStream(FileInputStream(zipFile)).use { zis ->
                     var entry = zis.nextEntry
+                    var totalBytes = 0L
                     while (entry != null) {
-                        val outputFile = File(extractDir, entry.name)
-                        outputFile.parentFile?.mkdirs()
-                        if (!entry.isDirectory) {
+                        val outputFile = File(extractRoot, entry.name).canonicalFile
+                        if (!outputFile.path.startsWith(extractRoot.path + File.separator)) {
+                            throw SecurityException("Backup contains an illegal path: ${entry.name}")
+                        }
+                        if (entry.isDirectory) {
+                            outputFile.mkdirs()
+                        } else {
+                            outputFile.parentFile?.mkdirs()
                             FileOutputStream(outputFile).use { fos ->
-                                zis.copyTo(fos)
+                                totalBytes += zis.copyTo(fos)
+                            }
+                            // Guards against a small archive that inflates without bound.
+                            if (totalBytes > MAX_EXTRACTED_BYTES) {
+                                throw IOException("Backup is unreasonably large — refusing to extract")
                             }
                         }
                         zis.closeEntry()
@@ -219,5 +233,8 @@ abstract class BaseBackupManager(
 
     companion object {
         private const val TAG = "BaseBackupManager"
+
+        /** Upper bound on total inflated backup size, as zip-bomb protection. */
+        private const val MAX_EXTRACTED_BYTES = 512L * 1024 * 1024
     }
 }

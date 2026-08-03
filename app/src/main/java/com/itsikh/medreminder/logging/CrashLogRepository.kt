@@ -41,10 +41,18 @@ class CrashLogRepository @Inject constructor(
      * Returns the content of the most recently modified crash log file, or `null` if
      * no crash logs exist. The returned string may be several KB.
      */
-    fun getLatestCrashLog(): String? {
-        val files = crashDir.listFiles() ?: return null
-        val latestFile = files.maxByOrNull { it.lastModified() } ?: return null
-        return latestFile.readText()
+    fun getLatestCrashLog(): String? = latestCrashLogFile()?.readText()
+
+    /** The most recently modified crash log file, or null when there are none. */
+    fun latestCrashLogFile(): File? =
+        crashDir.listFiles()?.maxByOrNull { it.lastModified() }
+
+    /**
+     * Deletes one crash log file. Reporting used to clear the whole directory after
+     * submitting only the newest report, silently discarding every earlier crash.
+     */
+    fun deleteCrashLog(file: File) {
+        runCatching { file.delete() }
     }
 
     /**

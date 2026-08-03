@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.itsikh.medreminder.data.model.LogStatus
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -28,8 +30,20 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val meds by viewModel.todayMedications.collectAsState()
-    val dateLabel = remember {
-        SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(Date())
+    val dayStart by viewModel.dayStart.collectAsState()
+    // Keyed on the day so the header follows the date across midnight.
+    val dateLabel = remember(dayStart) {
+        SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(Date(dayStart))
+    }
+
+    // The window can also be stale after the app sat in the background overnight.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshDay()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -105,29 +119,25 @@ fun HomeScreen(
 @Composable
 private fun TodayMedCard(item: TodayMedication, onTaken: () -> Unit) {
     val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val schedTime = remember(item.schedule) {
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, item.schedule.timeHour)
-            set(Calendar.MINUTE, item.schedule.timeMinute)
-            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.time
-    }
+    val schedTime = remember(item.scheduledTimeMillis) { Date(item.scheduledTimeMillis) }
 
     val containerColor = when {
-        item.isTaken -> MaterialTheme.colorScheme.surfaceVariant
+        item.isTaken || item.isSkipped -> MaterialTheme.colorScheme.surfaceVariant
         item.isMissed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
         else -> MaterialTheme.colorScheme.surface
     }
     val statusText = when {
         item.isTaken -> "✅ Taken at ${item.log?.takenTimeMillis?.let { timeFmt.format(Date(it)) } ?: ""}"
-        item.isMissed -> "❌ Missed"
+        item.isSkipped -> "🚫 Skipped today"
         item.isSnoozed -> "⏰ Snoozed"
+        item.isMissed -> "❌ Missed"
         else -> "⏳ Scheduled ${timeFmt.format(schedTime)}"
     }
     val statusColor = when {
         item.isTaken -> Color(0xFF4CAF50)
-        item.isMissed -> MaterialTheme.colorScheme.error
+        item.isSkipped -> MaterialTheme.colorScheme.onSurfaceVariant
         item.isSnoozed -> Color(0xFFFF9800)
+        item.isMissed -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -169,7 +179,7 @@ private fun TodayMedCard(item: TodayMedication, onTaken: () -> Unit) {
                     )
                 }
             }
-            if (!item.isTaken) {
+            if (!item.isTaken && !item.isSkipped) {
                 Button(
                     onClick = onTaken,
                     modifier = Modifier.height(36.dp),

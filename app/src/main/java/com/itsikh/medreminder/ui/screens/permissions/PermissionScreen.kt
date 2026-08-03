@@ -47,35 +47,66 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-private enum class PermStep { CORE, BACKGROUND_LOCATION, EXACT_ALARM, DONE }
+private enum class PermStep { NOTIFICATIONS, LOCATION, BACKGROUND_LOCATION, EXACT_ALARM, DONE }
 
-private fun computeStep(context: Context): PermStep {
-    val needsNotification = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-    val needsFineLocation = ContextCompat.checkSelfPermission(
-        context, Manifest.permission.ACCESS_FINE_LOCATION
-    ) != PackageManager.PERMISSION_GRANTED
+private fun isGranted(context: Context, permission: String): Boolean =
+    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    if (needsNotification || needsFineLocation) return PermStep.CORE
+private fun needsNotifications(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        !isGranted(context, Manifest.permission.POST_NOTIFICATIONS)
 
+private fun needsExactAlarms(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == false
+
+/**
+ * The next permission to ask for, skipping anything the user has declined this session.
+ *
+ * [skipped] is what makes the "Skip for now" buttons work: without it they recomputed the
+ * same step and did nothing, so declining an optional permission left the user stranded
+ * on this screen with no way into the app.
+ */
+private fun computeStep(context: Context, skipped: Set<PermStep>): PermStep {
+    if (needsNotifications(context) && PermStep.NOTIFICATIONS !in skipped) return PermStep.NOTIFICATIONS
+
+    if (!isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION) &&
+        PermStep.LOCATION !in skipped
+    ) return PermStep.LOCATION
+
+    // Only meaningful once foreground location is granted.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+        isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION) &&
+        !isGranted(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) &&
+        PermStep.BACKGROUND_LOCATION !in skipped
     ) return PermStep.BACKGROUND_LOCATION
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val alarmManager = context.getSystemService(AlarmManager::class.java)
-        if (!alarmManager.canScheduleExactAlarms()) return PermStep.EXACT_ALARM
-    }
+    if (needsExactAlarms(context) && PermStep.EXACT_ALARM !in skipped) return PermStep.EXACT_ALARM
 
     return PermStep.DONE
 }
 
-fun allPermissionsGranted(context: Context): Boolean = computeStep(context) == PermStep.DONE
+/**
+ * Whether the app can start straight at the home screen.
+ *
+ * Only notification delivery is genuinely required. Location powers the optional "snooze
+ * until I'm home" action and must never block access to the app — it can be granted later
+ * from Snooze & Location settings.
+ */
+fun allPermissionsGranted(context: Context): Boolean =
+    !needsNotifications(context) && !needsExactAlarms(context)
 
 @Composable
 fun PermissionScreen(onAllGranted: () -> Unit) {
     val context = LocalContext.current
-    var step by remember { mutableStateOf(computeStep(context)) }
+    val skipped = remember { mutableStateOf(emptySet<PermStep>()) }
+    var step by remember { mutableStateOf(computeStep(context, skipped.value)) }
+
+    fun recompute() { step = computeStep(context, skipped.value) }
+    fun skipCurrent() {
+        skipped.value = skipped.value + step
+        recompute()
+    }
 
     LaunchedEffect(step) {
         if (step == PermStep.DONE) onAllGranted()
@@ -84,21 +115,36 @@ fun PermissionScreen(onAllGranted: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                step = computeStep(context)
-            }
+            if (event == Lifecycle.Event.ON_RESUME) recompute()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val corePermsLauncher = rememberLauncherForActivityResult(
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // A denial here is terminal — Android stops showing the dialog after the second
+        // refusal, so treat it as skipped rather than looping on the same step.
+        if (!granted) skipped.value = skipped.value + PermStep.NOTIFICATIONS
+        recompute()
+    }
+
+    val locationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { step = computeStep(context) }
+    ) { perms ->
+        if (perms[Manifest.permission.ACCESS_FINE_LOCATION] != true) {
+            skipped.value = skipped.value + PermStep.LOCATION
+        }
+        recompute()
+    }
 
     val bgLocationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { step = computeStep(context) }
+    ) { granted ->
+        if (!granted) skipped.value = skipped.value + PermStep.BACKGROUND_LOCATION
+        recompute()
+    }
 
     Scaffold { padding ->
         Column(
@@ -109,64 +155,107 @@ fun PermissionScreen(onAllGranted: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Two of the four steps are optional now, so the heading follows the step
+            // rather than claiming everything is required.
+            val optionalStep = step == PermStep.LOCATION || step == PermStep.BACKGROUND_LOCATION
             Text(
-                "Permissions Required",
+                if (optionalStep) "Optional Permission" else "Permission Required",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "MedReminder needs the following permissions to remind you about your medications.",
+                if (optionalStep)
+                    "This one only powers the \"snooze until I'm home\" action. You can skip it and set it up later in Snooze & Location."
+                else
+                    "MedReminder needs this to remind you about your medications.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(32.dp))
 
             when (step) {
-                PermStep.CORE -> {
+                PermStep.NOTIFICATIONS -> {
                     PermissionItem(
                         icon = Icons.Default.Notifications,
                         title = "Notifications",
-                        description = "To alert you when it's time to take your medication."
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    PermissionItem(
-                        icon = Icons.Default.LocationOn,
-                        title = "Location",
-                        description = "To snooze reminders until you arrive home."
+                        description = "Required — this is how reminders reach you when it's time to take your medication."
                     )
                     Spacer(Modifier.height(32.dp))
                     Button(
                         onClick = {
-                            val perms = buildList {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                                    add(Manifest.permission.POST_NOTIFICATIONS)
-                                add(Manifest.permission.ACCESS_FINE_LOCATION)
-                            }.toTypedArray()
-                            corePermsLauncher.launch(perms)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Grant Permissions") }
+                    ) { Text("Allow Notifications") }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { context.startActivity(appSettingsIntent(context)) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Open app settings instead") }
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(onClick = { skipCurrent() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Continue without notifications")
+                    }
+                }
+
+                PermStep.LOCATION -> {
+                    PermissionItem(
+                        icon = Icons.Default.LocationOn,
+                        title = "Location (optional)",
+                        description = "Only used for the \"snooze until I'm home\" action. Skip this if you don't want it — everything else works without it."
+                    )
+                    Spacer(Modifier.height(32.dp))
+                    Button(
+                        onClick = {
+                            locationLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Allow Location") }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { skipCurrent() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Skip — I don't need home reminders")
+                    }
                 }
 
                 PermStep.BACKGROUND_LOCATION -> {
                     PermissionItem(
                         icon = Icons.Default.LocationOn,
-                        title = "Background Location",
-                        description = "Required to detect when you arrive home and trigger snoozed medication reminders."
+                        title = "Background Location (optional)",
+                        description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                            "Needed to notice you've arrived home while the app is closed. Android only allows this from app settings — choose Permissions → Location → \"Allow all the time\"."
+                        else
+                            "Needed to notice you've arrived home while the app is closed."
                     )
                     Spacer(Modifier.height(32.dp))
                     Button(
                         onClick = {
-                            bgLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                            // From Android 11 a runtime request for background location is
+                            // auto-denied without any UI; app settings is the only route.
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                context.startActivity(appSettingsIntent(context))
+                            } else {
+                                bgLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Grant Background Location") }
+                    ) {
+                        Text(
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "Open App Settings"
+                            else "Grant Background Location"
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = { step = computeStep(context) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Skip for now") }
+                    TextButton(onClick = { skipCurrent() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Skip for now")
+                    }
                 }
 
                 PermStep.EXACT_ALARM -> {
@@ -189,10 +278,9 @@ fun PermissionScreen(onAllGranted: () -> Unit) {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Open Settings") }
                     Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = { step = computeStep(context) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Already granted? Continue") }
+                    TextButton(onClick = { skipCurrent() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Continue anyway (reminders may be delayed)")
+                    }
                 }
 
                 PermStep.DONE -> Unit
@@ -200,6 +288,10 @@ fun PermissionScreen(onAllGranted: () -> Unit) {
         }
     }
 }
+
+/** This app's entry in system Settings, where permissions Android won't prompt for live. */
+private fun appSettingsIntent(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
 
 @Composable
 private fun PermissionItem(icon: ImageVector, title: String, description: String) {

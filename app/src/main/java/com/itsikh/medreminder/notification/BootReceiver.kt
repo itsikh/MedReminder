@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -22,8 +23,12 @@ class BootReceiver : BroadcastReceiver() {
         if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val result = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            try { repository.rescheduleAllAlarms(alarmScheduler) }
-            finally { result.finish() }
+            try {
+                repository.rescheduleAllAlarms(alarmScheduler)
+                // Alarms don't survive a reboot, so doses due while the device was off were
+                // never resolved. Close them out rather than leaving them pending forever.
+                repository.markAbandonedLogsMissed()
+            } finally { result.finish() }
         }
     }
 }

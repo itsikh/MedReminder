@@ -186,10 +186,23 @@ class AppUpdateManager(
                 return@withContext null
             }
 
-            response.body?.byteStream()?.use { input ->
+            val stream = response.body?.byteStream()
+            if (stream == null) {
+                AppLogger.e(TAG, "Download failed: response had no body")
+                return@withContext null
+            }
+            stream.use { input ->
                 apkFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
+            }
+
+            // A truncated or empty file would still reach the installer and fail there
+            // with a far less useful error.
+            if (apkFile.length() == 0L) {
+                AppLogger.e(TAG, "Download failed: APK is empty")
+                apkFile.delete()
+                return@withContext null
             }
 
             AppLogger.i(TAG, "APK downloaded: ${apkFile.length()} bytes")
