@@ -10,6 +10,8 @@ An Android app for keeping track of medications and taking them on time.
 Built with Kotlin, Jetpack Compose (Material 3), Hilt and Room.
 Requires Android 8.0 (API 26) or newer.
 
+The app needs notification permission to deliver reminders.
+
 ## Building
 
 Building requires JDK 17.
