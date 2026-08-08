@@ -33,14 +33,13 @@ object AppConfig {
     // -----------------------------------------------------------------------------------------
 
     // autofix-agent: verified working
-    /** GitHub username or organization that owns the bug-report / issues repository. TODO: Change this. */
+    /** GitHub username or organization that owns the bug-report / issues repository. */
     const val GITHUB_ISSUES_REPO_OWNER = "itsikh"
 
     /**
      * GitHub repository name where bug report issues are created and screenshots are uploaded.
      * The GitHub token stored under [security.SecureKeyManager] key
      * [bugreport.GitHubIssuesClient.KEY_GITHUB_TOKEN] must have write access to this repo.
-     * TODO: Change this.
      */
     const val GITHUB_ISSUES_REPO_NAME = "MedReminder"
 
@@ -50,14 +49,13 @@ object AppConfig {
     // Can be the same as the issues repo or a different one (e.g. a dedicated releases repo).
     // -----------------------------------------------------------------------------------------
 
-    /** GitHub username or organization that owns the releases repository. TODO: Change this. */
+    /** GitHub username or organization that owns the releases repository. */
     const val GITHUB_RELEASES_REPO_OWNER = "itsikh"
 
     /**
      * GitHub repository name where GitHub Releases with APK assets are published.
      * [update.AppUpdateManager] fetches the latest release tag from this repo and compares
      * it against the running [BuildConfig.VERSION_NAME] to decide if an update is available.
-     * TODO: Change this.
      */
     const val GITHUB_RELEASES_REPO_NAME = "MedReminder"
 
@@ -72,7 +70,6 @@ object AppConfig {
      *
      * This is separate from `res/values/strings.xml` → `app_name`, which controls the
      * launcher icon label and window title.
-     * TODO: Change this.
      */
     const val APP_NAME = "MedReminder"
 
