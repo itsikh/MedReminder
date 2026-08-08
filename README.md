@@ -12,6 +12,8 @@ Requires Android 8.0 (API 26) or newer.
 
 ## Building
 
+Building requires JDK 17.
+
 ```sh
 ./gradlew assembleDebug
 ```
