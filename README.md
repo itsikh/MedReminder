@@ -20,6 +20,8 @@ Building requires JDK 17.
 
 The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
+The release APK (`./gradlew assembleRelease`) is written to `app/build/outputs/apk/release/app-release.apk`.
+
 `build.sh` and `install.sh` are convenience wrappers that set `JAVA_HOME` first.
 
 ## Source layout
