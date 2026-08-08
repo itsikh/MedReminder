@@ -26,6 +26,20 @@ The release APK (`./gradlew assembleRelease`) is written to `app/build/outputs/a
 
 `build.sh` and `install.sh` are convenience wrappers that set `JAVA_HOME` first.
 
+## Running
+
+With a device connected over USB debugging, or an emulator running:
+
+```sh
+./install.sh
+```
+
+This builds the debug APK and installs it. To install an already built APK directly:
+
+```sh
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## Source layout
 
 All application code lives in the `app/` module:
