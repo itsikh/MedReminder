@@ -58,7 +58,7 @@ git push origin main &
 git remote | grep -q '^github$' && git push github main &
 
 # Build immediately — do NOT wait for push
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
 ./gradlew assembleRelease \
   --parallel \
   --max-workers=11 \
